@@ -1,6 +1,9 @@
 package factory
 
 import (
+	"sync"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -13,6 +16,9 @@ const (
 	UpfDefaultIPv4       = "127.0.0.8"
 	UpfPfcpDefaultPort   = 8805
 	UpfGtpDefaultPort    = 2152
+	UpfSbiDefaultPort    = 8888 // TODO: Not sure if this is the correct default port
+
+	NfDefaultTLSKeyLogPath  = "./log/nfsslkey.log"
 )
 
 type Config struct {
@@ -21,7 +27,11 @@ type Config struct {
 	Pfcp        *Pfcp     `yaml:"pfcp"        valid:"required"`
 	Gtpu        *Gtpu     `yaml:"gtpu"        valid:"required"`
 	DnnList     []DnnList `yaml:"dnnList"     valid:"required"`
+	Sbi         *Sbi      `yaml:"sbi"         valid:"required"`
 	Logger      *Logger   `yaml:"logger"      valid:"required"`
+
+	// Lock
+	sync.RWMutex
 }
 
 type Pfcp struct {
@@ -50,6 +60,14 @@ type DnnList struct {
 	NatIfName string `yaml:"natifname" valid:"optional"`
 }
 
+type Sbi struct {
+	// Scheme       models.UriScheme `yaml:"scheme"`
+	BindingIPv4  string           `yaml:"bindingIPv4,omitempty" valid:"host,required"`
+	RegisterIPv4 string           `yaml:"registerIPv4,omitempty" valid:"host,optional"`
+	Port         int              `yaml:"port"`
+	// Cert         *Cert            `yaml:"cert,omitempty" valid:"optional"`
+}
+
 type Logger struct {
 	Enable       bool   `yaml:"enable"       valid:"optional"`
 	Level        string `yaml:"level"        valid:"required,in(trace|debug|info|warn|error|fatal|panic)"`
@@ -60,6 +78,53 @@ func (c *Config) GetVersion() string {
 	return c.Version
 }
 
+func (c *Config) GetSbiBindingAddr() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.GetSbiBindingIP() + ":" + strconv.Itoa(c.GetSbiPort())
+}
+
+func (c *Config) GetSbiBindingIP() string {
+	c.RLock()
+	defer c.RUnlock()
+	bindIP := "0.0.0.0"
+	if c.Sbi == nil {
+		return bindIP
+	}
+	if c.Sbi.BindingIPv4 != "" {
+		if bindIP = os.Getenv(c.Sbi.BindingIPv4); bindIP != "" {
+			logger.CfgLog.Infof("Parsing ServerIPv4 [%s] from ENV Variable", bindIP)
+		} else {
+			bindIP = c.Sbi.BindingIPv4
+		}
+	}
+	return bindIP
+}
+
+func (c *Config) GetSbiPort() int {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Sbi != nil && c.Sbi.Port != 0 {
+		return c.Sbi.Port
+	}
+	return UpfSbiDefaultPort
+}
+
+func (c *Config) SetLogEnable(enable bool) {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		c.Logger = &Logger{
+			Enable: enable,
+			Level:  "info",
+		}
+	} else {
+		c.Logger.Enable = enable
+	}
+}
+
 func (c *Config) Print() {
 	spew.Config.Indent = "\t"
 	str := spew.Sdump(c)
@@ -67,3 +132,4 @@ func (c *Config) Print() {
 	logger.CfgLog.Infof("%s", str)
 	logger.CfgLog.Infof("==================================================")
 }
+
