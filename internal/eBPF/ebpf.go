@@ -25,8 +25,8 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 
 	// Attach the eBPF program to the network interface.
 	// TODO: change interface name to the one in the configuration file
-	interfaceName := "upfgtp"
-	if err := Attach(interfaceName); err != nil {
+	interfaceName := upf.Config().Ebpf.InterfaceName
+	if err := AttachCounter(interfaceName); err != nil {
 		return nil, err
 	} 
 	logger.EbpfLog.Traceln("eBPF Probe attached to interface ", interfaceName)
@@ -34,4 +34,6 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 	logger.EbpfLog.Traceln("eBPF Probe initialized")
 	return p, nil
 }
+
+//TODO: Implement a function to remove eBPF probe
 

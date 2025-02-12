@@ -15,6 +15,7 @@ import (
 	"github.com/free5gc/go-upf/internal/logger"
 	"github.com/free5gc/go-upf/internal/sbi"
 	"github.com/free5gc/go-upf/internal/pfcp"
+	"github.com/free5gc/go-upf/internal/eBPF"
 	"github.com/free5gc/go-upf/pkg/factory"
 )
 
@@ -22,9 +23,11 @@ type UpfApp struct {
 	ctx        context.Context
 	wg         sync.WaitGroup
 	cfg        *factory.Config
+	
 	driver     forwarder.Driver
 	pfcpServer *pfcp.PfcpServer
 	sbiServer  *sbi.Server
+	ebpfProbe  *ebpf_probe.EbpfProbe
 }
 
 
@@ -44,6 +47,13 @@ func NewApp(cfg *factory.Config, tlsKeyLogPath string) (*UpfApp, error) {
 		return nil, errServer
 	}
 	upf.sbiServer = sbiServer
+
+	//TODO: init processor
+	// processor, err := processor.NewProcessor(nf)
+	// if err != nil {
+	// 	return nf, err
+	// }
+	// nf.processor = processor
 
 
 	return upf, nil
@@ -112,8 +122,12 @@ func (u *UpfApp) Run() error {
 	u.driver.HandleReport(u.pfcpServer)
 	u.pfcpServer.Start(&u.wg)
 
-	logger.MainLog.Infoln("UPF started")
+	u.ebpfProbe, err = ebpf_probe.NewEbpfProbe(u)
+	if err != nil {
+		logger.MainLog.Errorf("eBPF Probe initialization failed: %v", err)
+	}
 
+	logger.MainLog.Infoln("UPF started")
 	// Wait for interrupt signal to gracefully shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

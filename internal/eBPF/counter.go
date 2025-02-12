@@ -3,14 +3,15 @@ package ebpf_probe
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"net"
+
 	// "os"
 	"strings"
 	// "time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/free5gc/go-upf/internal/logger"
 )
 
 type ConnTuple struct {
@@ -20,13 +21,14 @@ type ConnTuple struct {
     DstPort uint16
 }
 
-// Attach the eBPF program to the network interface.
-func Attach(ifaceName string) error {
+// Attach the eBPF program to the network interface (XDP).
+func AttachCounter(ifaceName string) error {
 	
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		return fmt.Errorf("lookup network iface %q: %s", ifaceName, err)
 	}
+	logger.EbpfLog.Traceln("Found Interface Name: ", iface.Name, "successfully")
 
 	// Load pre-compiled programs into the kernel.
 	objs := counterObjects{}
@@ -34,6 +36,7 @@ func Attach(ifaceName string) error {
 		return fmt.Errorf("loading objects: %s", err)
 	}
 	defer objs.Close()
+	logger.EbpfLog.Traceln("Loaded counter eBPF objects successfully")
 
 	// Attach the program.
 	l, err := link.AttachXDP(link.XDPOptions{
@@ -45,8 +48,7 @@ func Attach(ifaceName string) error {
 	}
 	defer l.Close()
 
-	log.Printf("Attached XDP program to interface %q (index %d) \n\n", iface.Name, iface.Index)
-	log.Printf("Press Ctrl-C to exit and remove the eBPF program")
+	logger.EbpfLog.Traceln("Attached XDP program to interface ", iface.Name, " (index ", iface.Index, ") Successfully")
 
 	// Print the contents of the BPF hash map (source IP address -> packet count).
 	// ticker := time.NewTicker(2 * time.Second)
@@ -78,6 +80,8 @@ func Attach(ifaceName string) error {
 	// }
 	return nil
 }
+
+// TODO: Implement the function to get the eBPF map contents
 
 
 func formatConnMapContents(m *ebpf.Map) (string, error) {

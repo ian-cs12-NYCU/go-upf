@@ -28,6 +28,7 @@ type Config struct {
 	Gtpu        *Gtpu     `yaml:"gtpu"        valid:"required"`
 	DnnList     []DnnList `yaml:"dnnList"     valid:"required"`
 	Sbi         *Sbi      `yaml:"sbi"         valid:"required"`
+	Ebpf 	  	*eBPF     `yaml:"ebpf"        valid:"required"`
 	Logger      *Logger   `yaml:"logger"      valid:"required"`
 
 	// Lock
@@ -66,6 +67,10 @@ type Sbi struct {
 	RegisterIPv4 string           `yaml:"registerIPv4,omitempty" valid:"host,optional"`
 	Port         int              `yaml:"port"`
 	// Cert         *Cert            `yaml:"cert,omitempty" valid:"optional"`
+}
+
+type eBPF struct {
+	InterfaceName string `yaml:"interfaceName" valid:"required"`
 }
 
 type Logger struct {
