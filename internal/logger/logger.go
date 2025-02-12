@@ -18,6 +18,7 @@ var (
 	FwderLog *logrus.Entry
 	GinLog   *logrus.Entry
 	SBILog   *logrus.Entry
+	EbpfLog  *logrus.Entry
 )
 
 func init() {
@@ -42,5 +43,5 @@ func init() {
 	FwderLog = NfLog.WithField(logger_util.FieldCategory, "FWD")
 	GinLog = NfLog.WithField(logger_util.FieldCategory, "GIN")
 	SBILog = NfLog.WithField(logger_util.FieldCategory, "SBI")
-
+	EbpfLog = NfLog.WithField(logger_util.FieldCategory, "eBPF")
 }

@@ -26,6 +26,7 @@ type Server struct {
 	Upf
 
 	httpServer 	*http.Server
+	
 	router    	*gin.Engine
 }
 
