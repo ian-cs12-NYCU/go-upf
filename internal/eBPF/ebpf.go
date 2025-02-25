@@ -4,6 +4,7 @@ package ebpf_probe
 
 import (
 	"context"
+	"sync"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/free5gc/go-upf/internal/logger"
@@ -17,6 +18,7 @@ type Upf interface {
 
 type EbpfProbe struct {
 	Upf
+	once 	sync.Once
 	XdpIfName  string // XDP interface name
 	CounterObj counterObjects
 	CounterXDPLink link.Link
@@ -39,6 +41,16 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 }
 
 // TODO: Implement a function to remove eBPF probe
-func (e *EbpfProbe) RemoveProbe() error {
+func RemoveProbe(e EbpfProbe) error {
+	e.once.Do(func() {
+		if err := e.CounterXDPLink.Close(); err != nil {
+			logger.EbpfLog.Errorln("Error closing XDP link: ", err)
+		}
+		logger.EbpfLog.Traceln("counter XDP link removed")
+
+		e.CounterObj.Close()
+		logger.EbpfLog.Traceln("counter objects closed")
+		logger.EbpfLog.Traceln("eBPF Probe removed successfully")
+	})
 	return nil
 }
