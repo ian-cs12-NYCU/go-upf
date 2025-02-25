@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -126,7 +127,19 @@ func (u *UpfApp) Run() error {
 	if err != nil {
 		logger.MainLog.Errorf("eBPF Probe initialization failed: %v", err)
 	}
-	ebpf_probe.RemoveProbe(*u.ebpfProbe)
+	//-------Just Test ----
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			connTuple, err := u.ebpfProbe.GetConuterConnTuple()
+			if err != nil {
+				logger.MainLog.Errorf("GetConuterConnTuple failed: %v", err)
+			}
+			logger.MainLog.Infof("GetConuterConnTuple: %#v", connTuple)
+		}
+	}()
+	//----------------
 
 	logger.MainLog.Infoln("UPF started")
 	// Wait for interrupt signal to gracefully shutdown

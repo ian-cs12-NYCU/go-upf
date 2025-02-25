@@ -6,19 +6,18 @@ import (
 	"net"
 
 	// "os"
-	"strings"
 	// "time"
 
-	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/free5gc/go-upf/internal/logger"
 )
 
 type ConnTuple struct {
-	SrcIP   uint32
-	DstIP   uint32
+	SrcIP   net.IP
+	DstIP   net.IP
 	SrcPort uint16
 	DstPort uint16
+	Cnt    int
 }
 
 // Attach the eBPF program to the network interface (XDP).
@@ -63,31 +62,32 @@ func (e *EbpfProbe) detachCounter() error {
 	return nil
 }
 
+
 // TODO: Implement the function to get the eBPF map contents
+func (e *EbpfProbe) GetConuterConnTuple() (conn []ConnTuple, err error) {
 
-func formatConnMapContents(m *ebpf.Map) (string, error) {
-	var (
-		sb    strings.Builder
-		key   ConnTuple
-		count uint64
-	)
-
-	iter := m.Iterate()
-	for iter.Next(&key, &count) {
-		// 將網路序 IP 轉換成 net.IP 顯示
-		srcIP := net.IPv4(byte(key.SrcIP>>24), byte(key.SrcIP>>16), byte(key.SrcIP>>8), byte(key.SrcIP))
-		dstIP := net.IPv4(byte(key.DstIP>>24), byte(key.DstIP>>16), byte(key.DstIP>>8), byte(key.DstIP))
-		// 轉換 TCP 埠號（從網路序轉成主機序）
-		srcPort := ntohs(key.SrcPort)
-		dstPort := ntohs(key.DstPort)
-
-		fmt.Println(srcIP, dstIP, srcPort, dstPort, count)
-
-		sb.WriteString(fmt.Sprintf("\t%s:%d -> %s:%d : %d packets\n",
-			srcIP, srcPort, dstIP, dstPort, count))
+	connMap, err := e.CounterObj.ConntrackMap.Clone()
+	if err != nil {
+		return []ConnTuple{}, fmt.Errorf("cloning conntrack map: %s", err)
 	}
-	return sb.String(), iter.Err()
+
+	var key counterConnTuple
+	var value uint64
+	iter := connMap.Iterate()
+	for iter.Next(&key, &value) {
+		logger.EbpfLog.Traceln("key: ", key, "value: ", value)
+		conn = append(conn, ConnTuple{
+			SrcIP:   uint32ToIP(key.SrcIp),
+			SrcPort: ntohs(key.SrcPort),
+			DstIP:   uint32ToIP(key.DstIp),
+			DstPort: ntohs(key.DstPort),
+			Cnt:    int(value),
+		})
+	}
+	return conn, nil
 }
+
+
 
 func uint32ToIP(ip uint32) net.IP {
 	ipBytes := make([]byte, 4)
