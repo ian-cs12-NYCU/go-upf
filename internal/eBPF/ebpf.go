@@ -3,10 +3,11 @@ package ebpf_probe
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go counter counter.c -- -I../headers
 
 import (
-
 	"context"
-	"github.com/free5gc/go-upf/pkg/factory"
+
+	"github.com/cilium/ebpf/link"
 	"github.com/free5gc/go-upf/internal/logger"
+	"github.com/free5gc/go-upf/pkg/factory"
 )
 
 type Upf interface {
@@ -16,24 +17,28 @@ type Upf interface {
 
 type EbpfProbe struct {
 	Upf
+	XdpIfName  string // XDP interface name
+	CounterObj counterObjects
+	CounterXDPLink link.Link
 }
 
 func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
-	p := &EbpfProbe{
-		Upf: upf,
+	e := &EbpfProbe{
+		Upf:       upf,
+		XdpIfName: upf.Config().Ebpf.InterfaceName,
 	}
 
 	// Attach the eBPF program to the network interface.
-	// TODO: change interface name to the one in the configuration file
-	interfaceName := upf.Config().Ebpf.InterfaceName
-	if err := AttachCounter(interfaceName); err != nil {
+	if err := e.attachCounter(); err != nil {
 		return nil, err
-	} 
-	logger.EbpfLog.Traceln("eBPF Probe attached to interface ", interfaceName)
-
+	}
+	logger.EbpfLog.Traceln("eBPF Probe attached to interface ", e.XdpIfName)
+	logger.EbpfLog.Traceln("Check: \n\t\tCounterObj: ", e.CounterObj, " \n\t\tCounterXDPLink: ", e.CounterXDPLink)
 	logger.EbpfLog.Traceln("eBPF Probe initialized")
-	return p, nil
+	return e, nil
 }
 
-//TODO: Implement a function to remove eBPF probe
-
+// TODO: Implement a function to remove eBPF probe
+func (e *EbpfProbe) RemoveProbe() error {
+	return nil
+}
