@@ -41,13 +41,7 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 // TODO: Implement a function to remove eBPF probe
 func RemoveProbe(e EbpfProbe) error {
 	
-	if err := e.CounterXDPLink.Close(); err != nil {
-		logger.EbpfLog.Errorln("Error closing XDP link: ", err)
-	}
-	logger.EbpfLog.Traceln("counter XDP link removed")
-
-	e.CounterObj.Close()
-	logger.EbpfLog.Traceln("counter objects closed")
-	logger.EbpfLog.Traceln("eBPF Probe removed successfully")
+	e.detachCounter()
+	logger.EbpfLog.Traceln("eBPF Probe removed")
 	return nil
 }

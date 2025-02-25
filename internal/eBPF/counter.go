@@ -51,6 +51,18 @@ func (e *EbpfProbe) attachCounter() error {
 	return nil
 }
 
+// Detach the eBPF program from the network interface (XDP).
+func (e *EbpfProbe) detachCounter() error {
+	if err := e.CounterXDPLink.Close(); err != nil {
+		return fmt.Errorf("closing XDP link: %s", err)
+	}
+	logger.EbpfLog.Traceln("Counter XDP link removed")
+
+	e.CounterObj.Close()
+	logger.EbpfLog.Traceln("Counter objects closed")
+	return nil
+}
+
 // TODO: Implement the function to get the eBPF map contents
 
 func formatConnMapContents(m *ebpf.Map) (string, error) {

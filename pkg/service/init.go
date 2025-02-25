@@ -126,6 +126,7 @@ func (u *UpfApp) Run() error {
 	if err != nil {
 		logger.MainLog.Errorf("eBPF Probe initialization failed: %v", err)
 	}
+	ebpf_probe.RemoveProbe(*u.ebpfProbe)
 
 	logger.MainLog.Infoln("UPF started")
 	// Wait for interrupt signal to gracefully shutdown
