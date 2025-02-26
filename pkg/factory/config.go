@@ -2,13 +2,12 @@ package factory
 
 import (
 	"sync"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 
 	"github.com/free5gc/go-upf/internal/logger"
+	"github.com/free5gc/openapi/models"
 )
 
 const (
@@ -22,17 +21,31 @@ const (
 )
 
 type Config struct {
-	Version     string    `yaml:"version"     valid:"required,in(1.0.3)"`
+	Version     string    `yaml:"version"     valid:"required,in(1.0.4)"`
 	Description string    `yaml:"description" valid:"optional"`
 	Pfcp        *Pfcp     `yaml:"pfcp"        valid:"required"`
 	Gtpu        *Gtpu     `yaml:"gtpu"        valid:"required"`
+	Sbi         *Sbi      `yaml:"sbi" valid:"required"`
 	DnnList     []DnnList `yaml:"dnnList"     valid:"required"`
-	Sbi         *Sbi      `yaml:"sbi"         valid:"required"`
 	Ebpf 	  	*eBPF     `yaml:"ebpf"        valid:"required"`
 	Logger      *Logger   `yaml:"logger"      valid:"required"`
 
 	// Lock
 	sync.RWMutex
+}
+
+type Sbi struct {
+	Scheme     models.UriScheme `yaml:"scheme" valid:"required,in(http|https)"`
+	BindingIp  string           `yaml:"bindingIp" valid:"required,host"`
+	RegisterIp string           `yaml:"registerIp" valid:"required,host"`
+	Port       uint16           `yaml:"port" valid:"required"`
+	Cert       *Cert            `yaml:"cert,omitempty" valid:"optional"`
+	NrfUri     string           `yaml:"nrfUri" valid:"url,required"`
+}
+
+type Cert struct {
+	Pem string `yaml:"pem,omitempty" valid:"type(string),minstringlength(1),required"`
+	Key string `yaml:"key,omitempty" valid:"type(string),minstringlength(1),required"`
 }
 
 type Pfcp struct {
@@ -61,14 +74,6 @@ type DnnList struct {
 	NatIfName string `yaml:"natifname" valid:"optional"`
 }
 
-type Sbi struct {
-	// Scheme       models.UriScheme `yaml:"scheme"`
-	BindingIPv4  string           `yaml:"bindingIPv4,omitempty" valid:"host,required"`
-	RegisterIPv4 string           `yaml:"registerIPv4,omitempty" valid:"host,optional"`
-	Port         int              `yaml:"port"`
-	// Cert         *Cert            `yaml:"cert,omitempty" valid:"optional"`
-}
-
 type eBPF struct {
 	InterfaceName string `yaml:"interfaceName" valid:"required"`
 }
@@ -83,51 +88,8 @@ func (c *Config) GetVersion() string {
 	return c.Version
 }
 
-func (c *Config) GetSbiBindingAddr() string {
-	c.RLock()
-	defer c.RUnlock()
-	return c.GetSbiBindingIP() + ":" + strconv.Itoa(c.GetSbiPort())
-}
-
-func (c *Config) GetSbiBindingIP() string {
-	c.RLock()
-	defer c.RUnlock()
-	bindIP := "0.0.0.0"
-	if c.Sbi == nil {
-		return bindIP
-	}
-	if c.Sbi.BindingIPv4 != "" {
-		if bindIP = os.Getenv(c.Sbi.BindingIPv4); bindIP != "" {
-			logger.CfgLog.Infof("Parsing ServerIPv4 [%s] from ENV Variable", bindIP)
-		} else {
-			bindIP = c.Sbi.BindingIPv4
-		}
-	}
-	return bindIP
-}
-
-func (c *Config) GetSbiPort() int {
-	c.RLock()
-	defer c.RUnlock()
-	if c.Sbi != nil && c.Sbi.Port != 0 {
-		return c.Sbi.Port
-	}
-	return UpfSbiDefaultPort
-}
-
-func (c *Config) SetLogEnable(enable bool) {
-	c.Lock()
-	defer c.Unlock()
-
-	if c.Logger == nil {
-		logger.CfgLog.Warnf("Logger should not be nil")
-		c.Logger = &Logger{
-			Enable: enable,
-			Level:  "info",
-		}
-	} else {
-		c.Logger.Enable = enable
-	}
+func (c *Config) GetSbiConfig() *Sbi {
+	return c.Sbi
 }
 
 func (c *Config) Print() {

@@ -3,14 +3,13 @@ package main
 import (
 	"math/rand"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"time"
 
 	"github.com/urfave/cli"
 
 	"github.com/free5gc/go-upf/internal/logger"
-	upfapp "github.com/free5gc/go-upf/pkg/service"
+	upfapp "github.com/free5gc/go-upf/pkg/app"
 	"github.com/free5gc/go-upf/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
 	"github.com/free5gc/util/version"
@@ -49,7 +48,7 @@ func main() {
 }
 
 func action(cliCtx *cli.Context) error {
-	logTlsKeyPath, err := initLogFile(cliCtx.StringSlice("log"))
+	err := initLogFile(cliCtx.StringSlice("log"))
 	if err != nil {
 		return err
 	}
@@ -61,7 +60,7 @@ func action(cliCtx *cli.Context) error {
 		return err
 	}
 
-	upf, err := upfapp.NewApp(cfg, logTlsKeyPath)
+	upf, err := upfapp.NewApp(cfg)
 	if err != nil {
 		return err
 	}
@@ -73,26 +72,11 @@ func action(cliCtx *cli.Context) error {
 	return nil
 }
 
-func initLogFile(logNfPath []string) (string,error) {
-	logTlsKeyPath := ""
-
+func initLogFile(logNfPath []string) error {
 	for _, path := range logNfPath {
 		if err := logger_util.LogFileHook(logger.Log, path); err != nil {
-			return "", err
+			return err
 		}
-
-		if logTlsKeyPath == "" {
-			logTlsKeyPath = path
-		}
-
-		nfDir, _ := filepath.Split(path)
-		tmpDir := filepath.Join(nfDir, "key")
-		if err := os.MkdirAll(tmpDir, 0o775); err != nil {
-			logger.InitLog.Errorf("Make directory %s failed: %+v", tmpDir, err)
-			return "", err
-		}
-		_, name := filepath.Split(factory.NfDefaultTLSKeyLogPath)
-		logTlsKeyPath = filepath.Join(tmpDir, name)
 	}
-	return logTlsKeyPath, nil
+	return nil
 }

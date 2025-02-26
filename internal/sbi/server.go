@@ -2,81 +2,122 @@ package sbi
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/go-upf/internal/logger"
-	"github.com/free5gc/go-upf/pkg/app"
+	"github.com/free5gc/go-upf/internal/sbi/consumer"
+	"github.com/free5gc/go-upf/pkg/factory"
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
 )
 
-type Upf interface {
-	app.App
-
-	// Processor() *processor.Processor
-	CancelContext() context.Context
+type UPF interface {
+	Config() *factory.Config
 }
 
 type Server struct {
-	Upf
+	UPF
 
-	httpServer 	*http.Server
-	
-	router    	*gin.Engine
+	consumer   *consumer.Consumer
+	httpServer *http.Server
+	router     *gin.Engine
 }
 
-func NewServer(upf Upf, tlsKeyLogPath string) (*Server, error) {
+func NewServer(upf UPF, tlsKeyLogPath string) (*Server, error) {
 	s := &Server{
-		Upf:  upf,
-		router: logger_util.NewGinWithLogrus(logger.GinLog),
+		UPF:    upf,
+		router: logger_util.NewGinWithLogrus(logger.SBILog),
 	}
-	s.ApplyServices()
+	s.ApplyService()
 
-	cfg := s.Config()
-	bindAddr := cfg.GetSbiBindingAddr()
-	logger.SBILog.Infof("Binding addr: [%s]", bindAddr)
-	
+	cfg := upf.Config().GetSbiConfig()
+	bindingAddr := fmt.Sprintf("%s:%d", cfg.BindingIp, cfg.Port)
+	logger.SBILog.Infof("SBI Binding: %s", bindingAddr)
+
 	var err error
-	if s.httpServer, err = httpwrapper.NewHttp2Server(bindAddr, tlsKeyLogPath, s.router); err != nil {
-		logger.InitLog.Errorf("Initialize HTTP server failed: %v", err)
+	s.consumer, err = consumer.NewConsumer(upf)
+	if err != nil {
 		return nil, err
 	}
-	s.httpServer.ErrorLog = log.New(logger.SBILog.WriterLevel(logrus.ErrorLevel), "HTTP2: ", 0)
 
-	// Potential slowloris attack GO-S2112
+	if s.httpServer, err = httpwrapper.NewHttp2Server(bindingAddr, tlsKeyLogPath, s.router); err != nil {
+		return nil, err
+	}
 	s.httpServer.ReadHeaderTimeout = 3 * time.Second
+
 	return s, nil
 }
 
-func (s *Server) newGroup(apiPrefix string) *gin.RouterGroup {
-	return s.router.Group(apiPrefix)
+func (s *Server) ApplyService() {
+	nwdafOamGroup := s.router.Group("/nwdaf-oam")
+	nwdafOamRoutes := s.getNwdafOamRoutes()
+	applyRoutes(nwdafOamGroup, nwdafOamRoutes)
 }
 
-func (s *Server) ApplyServices() {
-	// TODO: Add services
+func (s *Server) Start(ctx context.Context, wg *sync.WaitGroup) error {
+	if s.consumer != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			time.Sleep(1 * time.Second) // Wait for NRF to be ready
+			if _, _, err := s.consumer.RegisterNFInstance(ctx, s.Config().GetSbiConfig().NrfUri); err != nil {
+				logger.MainLog.Errorf("Register NFInstance error: %v", err)
+			}
+		}()
+	}
 
-	// serviceList := []models.ServiceName{}
+	wg.Add(1)
+	go s.startServer(wg)
 
-	// for serviceName := range s.Context().NfService {
-	// 	serviceList = append(serviceList, serviceName)
-	// 	var group *gin.RouterGroup
-	// 	var route []Route
-	// 	switch serviceName {
-	// 	// case models.ServiceName_NNWDAF_ANALYTICSINFO:
-	// 	// 	group = s.newGroup(factory.NnwdafAnalyticsInfoApiPrefix)
-	// 	// 	route = s.getAnalyticsInfoRoutes()
-	// 	default:
-	// 		logger.SBILog.Warnf("ServiceName:[%v] not provided by this NWDAF", serviceName)
-	// 		continue
-	// 	}
-	// 	applyRoutes(group, route)
-	// }
-	// logger.SBILog.Debugln("Add services:", serviceList)
+	return nil
+}
 
-	logger.SBILog.Errorln("Apply services not implemented")
+func (s *Server) startServer(wg *sync.WaitGroup) {
+	defer func() {
+		if p := recover(); p != nil {
+			logger.SBILog.Errorf("Recovered in Server.Start: %v", p)
+		}
+		wg.Done()
+	}()
+
+	var err error
+
+	c := s.Config().GetSbiConfig()
+	switch c.Scheme {
+	case models.UriScheme_HTTP:
+		err = s.httpServer.ListenAndServe()
+	case models.UriScheme_HTTPS:
+		err = s.httpServer.ListenAndServeTLS(c.Cert.Pem, c.Cert.Key)
+	default:
+		err = fmt.Errorf("Invalid SBI scheme: %s", c.Scheme)
+	}
+	if err != nil && err != http.ErrServerClosed {
+		logger.SBILog.Errorf("HTTP server error: %v", err)
+		return
+	}
+	logger.SBILog.Infof("HTTP server stopped")
+}
+
+func (s *Server) Stop() {
+	if s.consumer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.consumer.DeregisterNfInstance(ctx, s.Config().Sbi.NrfUri); err != nil {
+			logger.SBILog.Errorf("Deregister NFInstance error: %v", err)
+		}
+	}
+	if s.httpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			logger.SBILog.Errorf("HTTP server shutdown error: %v", err)
+		}
+	}
+	logger.SBILog.Infof("UPF SBI Server terminated")
 }
