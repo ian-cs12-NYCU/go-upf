@@ -10,7 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/go-upf/internal/logger"
+	"github.com/free5gc/go-upf/internal/eBPF"
 	"github.com/free5gc/go-upf/internal/sbi/consumer"
+	"github.com/free5gc/go-upf/internal/sbi/processor"
 	"github.com/free5gc/go-upf/pkg/factory"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/httpwrapper"
@@ -19,12 +21,15 @@ import (
 
 type UPF interface {
 	Config() *factory.Config
+	GetEbpfProbe() *ebpf_probe.EbpfProbe
 }
 
 type Server struct {
 	UPF
 
+	processor *processor.Processor
 	consumer   *consumer.Consumer
+
 	httpServer *http.Server
 	router     *gin.Engine
 }
@@ -42,6 +47,11 @@ func NewServer(upf UPF, tlsKeyLogPath string) (*Server, error) {
 
 	var err error
 	s.consumer, err = consumer.NewConsumer(upf)
+	if err != nil {
+		return nil, err
+	}
+
+	s.processor, err = processor.NewProcessor(upf)
 	if err != nil {
 		return nil, err
 	}

@@ -1,15 +1,17 @@
 package processor
 
 import (
-	"context"
+	// "context"
 
 	"github.com/free5gc/go-upf/pkg/factory"
+	"github.com/free5gc/go-upf/internal/eBPF"
 )
 
 type Upf interface {
 	Config() *factory.Config
+	GetEbpfProbe() *ebpf_probe.EbpfProbe
 	// Consumer() *consumer.Consumer
-	CancelContext() context.Context
+	// CancelContext() context.Context
 }
 
 type Processor struct {

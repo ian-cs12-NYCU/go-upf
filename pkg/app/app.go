@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"syscall"
-	"time"
+	// "time"
 
 	"github.com/sirupsen/logrus"
 
@@ -91,17 +91,17 @@ func (u *UpfApp) Run() error {
 		logger.MainLog.Errorf("eBPF Probe initialization failed: %v", err)
 	}
 	//-------Just Test ----
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			connTuple, err := u.ebpfProbe.GetConuterConnTuple()
-			if err != nil {
-				logger.MainLog.Errorf("GetConuterConnTuple failed: %v", err)
-			}
-			logger.MainLog.Infof("GetConuterConnTuple: %#v", connTuple)
-		}
-	}()
+	// go func() {
+	// 	ticker := time.NewTicker(2 * time.Second)
+	// 	defer ticker.Stop()
+	// 	for range ticker.C {
+	// 		connTuple, err := u.ebpfProbe.GetConuterConnTuple()
+	// 		if err != nil {
+	// 			logger.MainLog.Errorf("GetConuterConnTuple failed: %v", err)
+	// 		}
+	// 		logger.MainLog.Infof("GetConuterConnTuple: %#v", connTuple)
+	// 	}
+	// }()
 	//----------------
 
 	u.sbiServer, err = sbi.NewServer(u, "")
@@ -164,4 +164,8 @@ func (u *UpfApp) Start() {
 func (u *UpfApp) Terminate() {
 	logger.MainLog.Infof("Terminating UPF...")
 	logger.MainLog.Infof("UPF terminated")
+}
+
+func (u *UpfApp) GetEbpfProbe() *ebpf_probe.EbpfProbe {
+	return u.ebpfProbe
 }
