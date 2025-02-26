@@ -3,7 +3,7 @@ package ebpf_probe
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go counter counter.c -- -I../headers
 
 import (
-	"context"
+	// "context"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/free5gc/go-upf/internal/logger"
@@ -12,7 +12,7 @@ import (
 
 type Upf interface {
 	Config() *factory.Config
-	CancelContext() context.Context
+	// CancelContext() context.Context
 }
 
 type EbpfProbe struct {

@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/free5gc/go-upf/internal/logger"
 	"github.com/free5gc/go-upf/internal/pfcp"
 	"github.com/free5gc/go-upf/internal/sbi"
+	"github.com/free5gc/go-upf/internal/eBPF"
 	"github.com/free5gc/go-upf/pkg/factory"
 )
 
@@ -24,6 +26,7 @@ type UpfApp struct {
 	driver     forwarder.Driver
 	pfcpServer *pfcp.PfcpServer
 	sbiServer  *sbi.Server
+	ebpfProbe 	*ebpf_probe.EbpfProbe
 }
 
 func NewApp(cfg *factory.Config) (*UpfApp, error) {
@@ -82,6 +85,24 @@ func (u *UpfApp) Run() error {
 	u.pfcpServer = pfcp.NewPfcpServer(u.cfg, u.driver)
 	u.driver.HandleReport(u.pfcpServer)
 	u.pfcpServer.Start(&u.wg)
+
+	u.ebpfProbe, err = ebpf_probe.NewEbpfProbe(u)
+	if err != nil {
+		logger.MainLog.Errorf("eBPF Probe initialization failed: %v", err)
+	}
+	//-------Just Test ----
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			connTuple, err := u.ebpfProbe.GetConuterConnTuple()
+			if err != nil {
+				logger.MainLog.Errorf("GetConuterConnTuple failed: %v", err)
+			}
+			logger.MainLog.Infof("GetConuterConnTuple: %#v", connTuple)
+		}
+	}()
+	//----------------
 
 	u.sbiServer, err = sbi.NewServer(u, "")
 	if err != nil {
