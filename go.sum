@@ -34,6 +34,8 @@ dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
+github.com/antonfisher/nested-logrus-formatter v1.3.1 h1:NFJIr+pzwv5QLHTPyKz9UMEoHck02Q9L0FP13b/xSbQ=
+github.com/antonfisher/nested-logrus-formatter v1.3.1/go.mod h1:6WTfyWFkBc9+zyBaKIqRrg/KwMqBbodBjgbHjDz7zjA=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/bytedance/sonic v1.5.0/go.mod h1:ED5hyg4y6t3/9Ku1R6dU/4KyJ48DZ4jPhfY1O2AihPM=
@@ -61,12 +63,18 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
+github.com/free5gc/aper v1.0.5 h1:sUYFFmOXDLjyL4rU6zFnq81M4YluqP90Pso5e/J4UhA=
+github.com/free5gc/aper v1.0.5/go.mod h1:ybHxhYnRqQ9wD4yB9r/3MZdbCYCjtqUyfLpSnJpwWd4=
 github.com/free5gc/go-gtp5gnl v1.4.7-0.20241008130314-a3088e4cb7fa h1:D5OzFSttS6WY2XRspxtPKoHyCVkRLH9kqteQ1bGfOg0=
 github.com/free5gc/go-gtp5gnl v1.4.7-0.20241008130314-a3088e4cb7fa/go.mod h1:TT5aXB90NuSPMehuIK9lV2yJFnq6Qjw37ZqNB1QAKh0=
+github.com/free5gc/ngap v1.0.8 h1:ffzSJW26qbZolwbL8yIjrCoEn7PUc/VE91f/zjJIFMs=
+github.com/free5gc/ngap v1.0.8/go.mod h1:d5u7tYsBwxmLr3zw7wyBruRjc/gbdsHVhmdGFnVmfBU=
 github.com/free5gc/nwdaf v0.0.0-20250114105205-9fc8eb5ee974 h1:MRDzLLK68BOK8z6A+dnyHIpWWuMmVsxNm9lIgRL6OYI=
 github.com/free5gc/nwdaf v0.0.0-20250114105205-9fc8eb5ee974/go.mod h1:yC/8gysRT8cG1nFRMM9zlSiBq/jn2Filq87UOE9DSDo=
 github.com/free5gc/openapi v1.0.9-0.20240718074746-f272c26db1c3 h1:IY37zQ+nXFGhCNy0V0jXTMVG00j61dtC67GMg+8j2kU=
 github.com/free5gc/openapi v1.0.9-0.20240718074746-f272c26db1c3/go.mod h1:oy68rqnHakRLUCuEOXcis7/PWGBuil+UaXMeTBeYY8Y=
+github.com/free5gc/sctp v1.0.1 h1:g8WDO97r8B9ubkT5Hyk9b4I1fZUOii9Z39gQ2eRaASo=
+github.com/free5gc/sctp v1.0.1/go.mod h1:7QXfRWCmlkBGD0EIu3qL5o71bslfIakydz4h2QDZdjQ=
 github.com/free5gc/util v1.0.6 h1:dBt9drcXtYKE/cY5XuQcuffgsYclPIpIArhSeS6M+DQ=
 github.com/free5gc/util v1.0.6/go.mod h1:eSGN7POUM8LNTvg/E591XR6447a6/w1jFWGKNZPHcXw=
 github.com/gabriel-vasile/mimetype v1.4.2 h1:w5qFW6JKBz9Y393Y4q372O9A7cUSequkh1Q7OhCmWKU=

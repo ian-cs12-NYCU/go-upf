@@ -9,8 +9,10 @@ require (
 	github.com/cilium/ebpf v0.17.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/free5gc/go-gtp5gnl v1.4.7-0.20241008130314-a3088e4cb7fa
+	github.com/free5gc/ngap v1.0.8
 	github.com/free5gc/nwdaf v0.0.0-20250114105205-9fc8eb5ee974
 	github.com/free5gc/openapi v1.0.9-0.20240718074746-f272c26db1c3
+	github.com/free5gc/sctp v1.0.1
 	github.com/free5gc/util v1.0.6
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
@@ -28,10 +30,12 @@ require (
 )
 
 require (
+	github.com/antonfisher/nested-logrus-formatter v1.3.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/free5gc/aper v1.0.5 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
