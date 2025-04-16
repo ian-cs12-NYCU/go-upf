@@ -14,6 +14,6 @@ func (p *Processor) PacketCounterGetProcedure(c *gin.Context) {
 		})
 	}
 	c.JSON(200, gin.H{
-		"packets": connTuple,
+		"connList": connTuple,
 	})
 }

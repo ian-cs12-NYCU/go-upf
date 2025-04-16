@@ -6,6 +6,7 @@
 #include <linux/ip.h>
 #include <netinet/in.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
@@ -14,12 +15,21 @@
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define MAX_MAP_ENTRIES 16
+#define GTP_PORT 2152
+#define GTP_HEADER_LEN 8
 
 struct conn_tuple {
     __be32 src_ip;
     __be32 dst_ip;
     __be16 src_port;
     __be16 dst_port;
+};
+
+struct gtp_header {
+    __u8 flags;
+    __u8 message_type;
+    __be16 length;
+    __be32 teid;
 };
 
 // 用一個 LRU hash map 來紀錄每個連線四元組的封包數量
@@ -42,11 +52,15 @@ static __always_inline int parse_ip_addr(struct xdp_md *ctx, __u32 *ip_src_addr,
 	// First, parse the ethernet header.
 	struct ethhdr *eth = data;
 	if ((void *)(eth + 1) > data_end) {
+		const char msg[] = "The ethernet header is incomplete.\n";
+		bpf_trace_printk(msg, sizeof(msg));
 		return 0;
 	}
 
 	if (eth->h_proto != bpf_htons(ETH_P_IP)) {
 		// The protocol is not IPv4, so we can't parse an IPv4 source address.
+		const char msg[] = "The protocol is not IPv4, so we can't parse an IPv4 source address.\n";
+		bpf_trace_printk(msg, sizeof(msg));
 		return 0;
 	}
 
@@ -100,24 +114,85 @@ static __always_inline int parse_tcp_port(struct xdp_md *ctx, __be16 *src_port, 
 	return 1;
 }
 
+// Parse GTP header and extract inner IP header
+static __always_inline int parse_gtp_tunnel(struct xdp_md *ctx, void **data, void **data_end, struct iphdr **inner_ip) {
+    struct udphdr *udp = *data;
+    if ((void *)(udp + 1) > *data_end) {
+        return 0;
+    }
 
+    // Check if the UDP port matches GTP (2152)
+    if (udp->source != bpf_htons(GTP_PORT) && udp->dest != bpf_htons(GTP_PORT)) {
+        return 0;
+    }
+
+    struct gtp_header *gtp = (void *)(udp + 1);
+    if ((void *)(gtp + 1) > *data_end) {
+        return 0;
+    }
+
+    // Check if the GTP message type is T-PDU (0xff)
+    if (gtp->message_type != 0xff) {
+        return 0;
+    }
+
+    // Extract the inner IP header
+    *inner_ip = (void *)(gtp + 1);
+    if ((void *)(*inner_ip + 1) > *data_end) {
+        return 0;
+    }
+
+    return 1;
+}
 
 SEC("xdp")
 int xdp_prog_func(struct xdp_md *ctx) {
-    __u32 src_ip, dest_ip;
-    __be16 src_port, dest_port;
+    void *data_end = (void *)(long)ctx->data_end;
+    void *data = (void *)(long)ctx->data;
+
+	// check if the ethernet header is complete
+    struct ethhdr *eth = data;
+    if ((void *)(eth + 1) > data_end) { 
+        return XDP_PASS;
+    }
+
+    // Check if the protocol is IPv4
+    if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+        return XDP_PASS;
+    }
+
+    struct iphdr *outer_ip = (void *)(eth + 1);
+    if ((void *)(outer_ip + 1) > data_end) {
+        return XDP_PASS;
+    }
+
+    // Check if the outer IP protocol is UDP
+    if (outer_ip->protocol != IPPROTO_UDP) {
+        return XDP_PASS;
+    }
+
+    struct iphdr *inner_ip = NULL;
+    void *udp = (void *)outer_ip + (outer_ip->ihl * 4);
+
+    // Parse GTP tunnel and extract inner IP
+    if (!parse_gtp_tunnel(ctx, &udp, &data_end, &inner_ip)) {
+        return XDP_PASS;
+    }
+
+    // Parse inner IP and TCP/UDP headers
+    __u32 src_ip = inner_ip->saddr;
+    __u32 dest_ip = inner_ip->daddr;
+
+    // Directly print source and destination IP addresses using %pI4
+    const char ip_msg[] = "Inner Src IP: %pI4, Inner Dest IP: %pI4\n";
+    bpf_trace_printk(ip_msg, sizeof(ip_msg), &src_ip, &dest_ip);
+
+
     struct conn_tuple key = {0};
-
-    if (!parse_ip_addr(ctx, &src_ip, &dest_ip))
-        goto done;
-
-    if (!parse_tcp_port(ctx, &src_port, &dest_port))
-        goto done;
-
     key.src_ip   = src_ip;
     key.dst_ip   = dest_ip;
-    key.src_port = src_port;
-    key.dst_port = dest_port;
+    key.src_port = 0;
+    key.dst_port = 0;
 
     __u64 *pkt_count = bpf_map_lookup_elem(&conntrack_map, &key);
     if (!pkt_count) {
@@ -127,16 +202,16 @@ int xdp_prog_func(struct xdp_md *ctx) {
         __sync_fetch_and_add(pkt_count, 1);
     }
 
-	// If not using the following code, the program will be optimized out
-	// Degug message will cause performance issue
-	if (!pkt_count) {
-		const char msg[] = " 'pkt_count' pointer lose\n";
-		bpf_trace_printk(msg, sizeof(msg));
-		goto done;
-	} else {
-		const char msg[] = "Hello, packet count = %d\n";
-		bpf_trace_printk(msg, sizeof(msg), *pkt_count);
-	}
+    // If not using the following code, the program will be optimized out
+    // Debug message will cause performance issue
+    if (!pkt_count) {
+        const char msg[] = " 'pkt_count' pointer lose\n";
+        bpf_trace_printk(msg, sizeof(msg));
+        goto done;
+    } else {
+        const char msg[] = "Hello, packet count = %d\n";
+        bpf_trace_printk(msg, sizeof(msg), *pkt_count);
+    }
 
 done:
     return XDP_PASS;

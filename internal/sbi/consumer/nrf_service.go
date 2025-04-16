@@ -60,7 +60,7 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context, nfUri string,
 		NfInstanceID:             &s.NfId,
 		NrfNfManagementNfProfile: nfProfile,
 	}
-	maxTryTimes := 3
+	maxTryTimes := 10
 	for i := 0; i < maxTryTimes; i++ {
 		select {
 		case <-ctx.Done():
