@@ -6,6 +6,15 @@ import (
 )
 
 func (p *Processor) PacketCounterGetProcedure(c *gin.Context) {
+	// Check if eBPF is enabled
+	if p.GetEbpfProbe() == nil {
+		logger.SBILog.Warnln("eBPF is disabled in the configuration. ")
+		c.JSON(500, gin.H{
+			"error": "eBPF is disabled in the configuration.",
+		})
+		return
+	}
+
 	connTuple, err := p.GetEbpfProbe().GetConuterConnTuple()
 	if err != nil {
 		logger.SBILog.Errorf("Get counter conn tuple failed: %+v", err)

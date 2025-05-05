@@ -17,18 +17,18 @@ const (
 	UpfGtpDefaultPort    = 2152
 	UpfSbiDefaultPort    = 8888 // TODO: Not sure if this is the correct default port
 
-	NfDefaultTLSKeyLogPath  = "./log/nfsslkey.log"
+	NfDefaultTLSKeyLogPath = "./log/nfsslkey.log"
 )
 
 type Config struct {
-	Version     string    `yaml:"version"     valid:"required,in(1.0.4)"`
-	Description string    `yaml:"description" valid:"optional"`
-	Pfcp        *Pfcp     `yaml:"pfcp"        valid:"required"`
-	Gtpu        *Gtpu     `yaml:"gtpu"        valid:"required"`
-	Sbi         *Sbi      `yaml:"sbi" valid:"required"`
-	DnnList     []DnnList `yaml:"dnnList"     valid:"required"`
-	Ebpf 	  	*eBPF     `yaml:"ebpf"        valid:"required"`
-	Logger      *Logger   `yaml:"logger"      valid:"required"`
+	Version     string      `yaml:"version"     valid:"required,in(1.0.4)"`
+	Description string      `yaml:"description" valid:"optional"`
+	Pfcp        *Pfcp       `yaml:"pfcp"        valid:"required"`
+	Gtpu        *Gtpu       `yaml:"gtpu"        valid:"required"`
+	Sbi         *Sbi        `yaml:"sbi" valid:"required"`
+	DnnList     []DnnList   `yaml:"dnnList"     valid:"required"`
+	Ebpf        *EbpfConfig `yaml:"ebpf"        valid:"required"`
+	Logger      *Logger     `yaml:"logger"      valid:"required"`
 
 	// Lock
 	sync.RWMutex
@@ -74,8 +74,9 @@ type DnnList struct {
 	NatIfName string `yaml:"natifname" valid:"optional"`
 }
 
-type eBPF struct {
-	InterfaceName string `yaml:"interfaceName" valid:"required"`
+type EbpfConfig struct {
+	Enable        bool   `yaml:"enable" valid:"optional"`
+	InterfaceName string `yaml:"interfaceName" valid:"optional" `
 }
 
 type Logger struct {
@@ -99,4 +100,3 @@ func (c *Config) Print() {
 	logger.CfgLog.Infof("%s", str)
 	logger.CfgLog.Infof("==================================================")
 }
-

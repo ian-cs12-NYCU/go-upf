@@ -17,12 +17,17 @@ type Upf interface {
 
 type EbpfProbe struct {
 	Upf
-	XdpIfName  string // XDP interface name
-	CounterObj counterObjects
+	XdpIfName      string // XDP interface name
+	CounterObj     counterObjects
 	CounterXDPLink link.Link
 }
 
 func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
+	if !upf.Config().Ebpf.Enable {
+		logger.EbpfLog.Warnln("eBPF is disabled in the configuration. Skipping eBPF probe initialization.")
+		return nil, nil
+	}
+
 	e := &EbpfProbe{
 		Upf:       upf,
 		XdpIfName: upf.Config().Ebpf.InterfaceName,
@@ -40,7 +45,7 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 
 // TODO: Implement a function to remove eBPF probe
 func RemoveProbe(e EbpfProbe) error {
-	
+
 	e.detachCounter()
 	logger.EbpfLog.Traceln("eBPF Probe removed")
 	return nil
