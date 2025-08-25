@@ -10,6 +10,13 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
+#define bpf_debug(fmt, ...)						\
+		({							\
+			char ____fmt[] = fmt;				\
+			bpf_trace_printk(____fmt, sizeof(____fmt),	\
+				     ##__VA_ARGS__);			\
+		})
+
 
 
 char __license[] SEC("license") = "Dual MIT/GPL";
@@ -39,7 +46,6 @@ struct {
     __type(key, struct conn_tuple);
     __type(value, __u64);  // 若封包數量可能很大，用 __u64 比較安全
 } conntrack_map SEC(".maps");
-
 
 /*
 Attempt to parse the IPv4 source address from the packet.
@@ -73,44 +79,6 @@ static __always_inline int parse_ip_addr(struct xdp_md *ctx, __u32 *ip_src_addr,
 	// Return the source IP address in network byte order.
 	*ip_src_addr = (__u32)(ip->saddr);
 	*ip_dest_addr = (__u32)(ip->daddr);
-	return 1;
-}
-
-static __always_inline int parse_tcp_port(struct xdp_md *ctx, __be16 *src_port, __be16 *dest_port) {
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data     = (void *)(long)ctx->data;
-
-	// First, parse the ethernet header.
-	struct ethhdr *eth = data;
-	if ((void *)(eth + 1) > data_end) {
-		return 0;
-	}
-
-	if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-		// The protocol is not IPv4, so we can't parse an IPv4 source address.
-		return 0;
-	}
-
-	// Then parse the IP header.
-	struct iphdr *ip = (void *)(eth + 1);
-	if ((void *)(ip + 1) > data_end) {
-		return 0;
-	}
-
-	if (ip->protocol != IPPROTO_TCP) {
-		// The protocol is not TCP, so we can't parse a TCP port.
-		return 0;
-	}
-
-	// -------- Then parse the TCP header. ----------------
-	struct tcphdr *tcp = (void *)ip + (ip->ihl * 4);
-	if ((void *)(tcp + 1) > data_end) {
-		return 0;
-	}
-
-	// Return the source port in network byte order.
-	*src_port = (__u16)(tcp->source);
-	*dest_port = (__u16)(tcp->dest);
 	return 1;
 }
 
@@ -152,22 +120,30 @@ int xdp_prog_func(struct xdp_md *ctx) {
 
 	// check if the ethernet header is complete
     struct ethhdr *eth = data;
-    if ((void *)(eth + 1) > data_end) { 
+    if ((void *)(eth + 1) > data_end) {
+        const char msg[] = "The ethernet header is incomplete.\n";
+        bpf_trace_printk(msg, sizeof(msg));
         return XDP_PASS;
     }
 
     // Check if the protocol is IPv4
     if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+        const char msg[] = "The protocol is not IPv4, so we can't parse an IPv4 source address.\n";
+        bpf_trace_printk(msg, sizeof(msg));
         return XDP_PASS;
     }
 
     struct iphdr *outer_ip = (void *)(eth + 1);
     if ((void *)(outer_ip + 1) > data_end) {
+        const char msg[] = "The outer IP header is incomplete.\n";
+        bpf_trace_printk(msg, sizeof(msg));
         return XDP_PASS;
     }
 
     // Check if the outer IP protocol is UDP
     if (outer_ip->protocol != IPPROTO_UDP) {
+        const char msg[] = "The outer IP protocol is not UDP, so we can't parse the inner IP header.\n";
+        bpf_trace_printk(msg, sizeof(msg));
         return XDP_PASS;
     }
 
@@ -184,9 +160,7 @@ int xdp_prog_func(struct xdp_md *ctx) {
     __u32 dest_ip = inner_ip->daddr;
 
     // Directly print source and destination IP addresses using %pI4
-    const char ip_msg[] = "Inner Src IP: %pI4, Inner Dest IP: %pI4\n";
-    bpf_trace_printk(ip_msg, sizeof(ip_msg), &src_ip, &dest_ip);
-
+    bpf_debug("Inner Src IP: %pI4, Inner Dest IP: %pI4\n", &src_ip, &dest_ip);
 
     struct conn_tuple key = {0};
     key.src_ip   = src_ip;
@@ -198,19 +172,10 @@ int xdp_prog_func(struct xdp_md *ctx) {
     if (!pkt_count) {
         __u64 init_pkt_count = 1;
         bpf_map_update_elem(&conntrack_map, &key, &init_pkt_count, BPF_ANY);
+        bpf_debug("key:(src:%pI4, dst:%pI4) packet count = %d\n", &key.src_ip, &key.dst_ip, init_pkt_count);
     } else {
         __sync_fetch_and_add(pkt_count, 1);
-    }
-
-    // If not using the following code, the program will be optimized out
-    // Debug message will cause performance issue
-    if (!pkt_count) {
-        const char msg[] = " 'pkt_count' pointer lose\n";
-        bpf_trace_printk(msg, sizeof(msg));
-        goto done;
-    } else {
-        const char msg[] = "Hello, packet count = %d\n";
-        bpf_trace_printk(msg, sizeof(msg), *pkt_count);
+        bpf_debug("key:(src:%pI4, dst:%pI4) packet count = %d\n", &key.src_ip, &key.dst_ip, *pkt_count);
     }
 
 done:

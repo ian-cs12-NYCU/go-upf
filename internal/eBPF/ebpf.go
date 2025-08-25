@@ -27,6 +27,7 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 		logger.EbpfLog.Warnln("eBPF is disabled in the configuration. Skipping eBPF probe initialization.")
 		return nil, nil
 	}
+	logger.EbpfLog.Infoln("eBPF is enabled in the configuration. Initializing eBPF probe.")
 
 	e := &EbpfProbe{
 		Upf:       upf,
