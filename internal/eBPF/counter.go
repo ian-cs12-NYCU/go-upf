@@ -87,8 +87,6 @@ func (e *EbpfProbe) GetConuterConnTuple() (conn []ConnTuple, err error) {
 	return conn, nil
 }
 
-
-
 func uint32ToIP(ip uint32) net.IP {
 	ipBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(ipBytes, ip)

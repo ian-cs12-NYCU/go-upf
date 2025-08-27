@@ -1,6 +1,7 @@
 package ebpf_probe
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go counter counter.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "-DDEBUG" counter_debug counter.c -- -I../headers
 
 import (
 	// "context"

@@ -10,20 +10,14 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 #include "protocols/gtpu.h"
+#include "utils/debug_tool.h"
 
-#define bpf_debug(fmt, ...)						\
-		({							\
-			char ____fmt[] = fmt;				\
-			bpf_trace_printk(____fmt, sizeof(____fmt),	\
-				     ##__VA_ARGS__);			\
-		})
 
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define MAX_MAP_ENTRIES 16
-#define GTP_PORT 2152
-#define GTP_HEADER_LEN 12 // 8+4(extension header)
+
  
 struct conn_tuple {
     __be32 src_ip;
@@ -33,12 +27,12 @@ struct conn_tuple {
 };
 
 
-// 用一個 LRU hash map 來紀錄每個連線四元組的封包數量
+// Use an LRU hash map to track packet counts for each connection 4-tuple
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, MAX_MAP_ENTRIES);
     __type(key, struct conn_tuple);
-    __type(value, __u64);  // 若封包數量可能很大，用 __u64 比較安全
+    __type(value, __u64);  // Use __u64 for large packet counts
 } conntrack_map SEC(".maps");
 
 static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
@@ -48,55 +42,45 @@ static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
         bpf_debug("Invalid inner IPv4 header\n");
         return XDP_ABORTED;
     }
-    bpf_debug("Inner IPv4 packet\n");
-    bpf_debug("IHL: %u", iph->ihl);
-    bpf_debug("TOS: %u", iph->tos);
-    bpf_debug("Total Length: %u", bpf_ntohs(iph->tot_len));
-    bpf_debug("ID: %u", bpf_ntohs(iph->id));
-    bpf_debug("Frag Off: %u", bpf_ntohs(iph->frag_off));
-    bpf_debug("TTL: %u", iph->ttl);
-    bpf_debug("Protocol: %u", iph->protocol);
-    bpf_debug("Checksum: %u", bpf_ntohs(iph->check));
-    bpf_debug("SAddr(raw): 0x%x", iph->saddr);
-    bpf_debug("DAddr(raw): 0x%x", iph->daddr);
-
-    // TODO: Check IP version is 4
-    // if (iph->version != 4) {
-    //     bpf_debug("Not an inner IPv4 packet\n");
-    //     return XDP_PASS;
-    // }
+    
+    if (iph->version != 4) {
+        bpf_debug("Not an inner IPv4 packet\n");
+        return XDP_PASS;
+    }
     
     __u32 ip_src = bpf_ntohl(iph->saddr);
     __u32 ip_dest = bpf_ntohl(iph->daddr);
 
-    bpf_debug("IPv4 src: %u.%u.%u", (ip_src >> 24) & 0xFF, (ip_src >> 16) & 0xFF, (ip_src >> 8) & 0xFF);
-    bpf_debug("IPv4 src: %u", ip_src & 0xFF);
-    bpf_debug("IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
-    bpf_debug("IPv4 dst: %u", ip_dest & 0xFF);
+    bpf_debug("inner IPv4 src: %u.%u.%u", (ip_src >> 24) & 0xFF, (ip_src >> 16) & 0xFF, (ip_src >> 8) & 0xFF);
+    bpf_debug("inner IPv4 src: %u", ip_src & 0xFF);
+    bpf_debug("inner IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
+    bpf_debug("inner IPv4 dst: %u", ip_dest & 0xFF);
 
     return XDP_PASS;
 }
 
 
-static __u32 gtp_handle(struct xdp_md* ctx, struct gtpuhdr *gtpuh) {
-    void *p_data_end = (void*)(long)ctx->data_end;
+static __u32 gtp_handle(struct xdp_md* ctx, const void* gtpuh) {
+    void *data_end = (void*)(long)ctx->data_end;
 
-    // Check GTP header length
-    if ((void*)gtpuh + sizeof(*gtpuh) > p_data_end) {
-        bpf_debug("Invalid GTP header\n");
-        return XDP_ABORTED;
+    const void *inner = NULL;
+    __u16 gtp_msg_len = 0;
+    const struct gtpu_fixed *gtp_hdr = NULL;
+
+    /* Locate the inner L3 starting point (automatically handles optional 4B and all ExtHdrs) */
+    if (gtpu_locate_inner_l3(gtpuh, data_end, &inner, &gtp_msg_len, &gtp_hdr) < 0) {
+        bpf_debug("GTP parse fail\n");
+        return XDP_PASS;
     }
 
-    // print GTP info
-    bpf_debug("GTP packet (TEID=%u)\n", ntohl(gtpuh->teid));
-    bpf_debug("GTP message type: %u\n", gtpuh->message_type);
-    bpf_debug("GTP message length: %u\n", ntohs(gtpuh->message_length));
+    if (inner + 1 > data_end) {
+        return XDP_PASS;
+    }
+    bpf_debug("GTP parse success, msg_len=%u, TEID=%u\n", gtp_msg_len, bpf_ntohl(gtp_hdr->teid));
+    bpf_debug("GTP flags: 0x%x, msg_type: %u\n", gtp_hdr->flags, gtp_hdr->msg_type);
+    bpf_debug("GTP TEID: %u\n", bpf_ntohl(gtp_hdr->teid));
 
-
-    // struct iphdr *inner_iph = (struct iphdr *)((void*)gtpuh + sizeof(*gtpuh));
-    struct iphdr *inner_iph = (struct iphdr *)((void*)gtpuh + GTP_HEADER_LEN); //TODO: use function to calculate GTP header
-
-    inner_ipv4_handle(ctx, inner_iph);
+    inner_ipv4_handle(ctx, (struct iphdr *)inner);
 
     return XDP_PASS;
 }
@@ -115,7 +99,7 @@ static __u32 udp_handle(struct xdp_md *ctx, struct udphdr *udph)
     switch(dest_port) {
     case GTP_UDP_PORT:
         bpf_debug("GTP packet (dest port=%d)\n", dest_port);
-        struct gtpuhdr *gtp_hdr = (struct gtpuhdr *)((void*)udph + sizeof(*udph));
+        struct gtpuhdr *gtp_hdr = (void*)udph + sizeof(*udph);
         gtp_handle(ctx, gtp_hdr);
         break;
     default:
@@ -181,7 +165,7 @@ static __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh) {
     __u32 dport;
     __u64 offset = sizeof(*ethh);
 
-    // Check Packet Length validate
+    // Check Packet Length validity
     if ((void*)ethh + offset > p_data_end) {
         bpf_debug("Invalid Ethernet header\n");
         return XDP_PASS;
@@ -197,7 +181,7 @@ static __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh) {
         struct vlan_hdr *vlan_hdr = (void*)(ethh + 1);
         offset += sizeof(struct vlan_hdr);
         
-        // Check Validate Length
+        // Check Validity of Length
         if ((void*)ethh + offset > p_data_end) {
             bpf_debug("Invalid VLAN header\n");
             return XDP_PASS;
@@ -226,7 +210,7 @@ int xdp_program_entrypoint(struct xdp_md *ctx) {
     void *data = (void*)(long)ctx->data;
     struct ethhdr *eth = data;
 
-    // start to handle the ethernet header
+    // Start to handle the ethernet header
     return eth_handle(ctx, eth);
 
 done:
