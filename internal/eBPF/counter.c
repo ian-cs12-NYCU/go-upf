@@ -37,6 +37,15 @@ struct flow_key {
     __u16 dport;      // destination port
 };
 
+struct pkt_rec {
+    __u64 ts_ns;        // capture time (monotonic)
+    __u32 len;          // packet length
+    __u8  l4;           // L4 proto (e.g., IPPROTO_TCP/UDP)
+    __u8  dir;          // 0=unknown, 1=ingress, 2=egress (or UL/DL)
+    __u8  tcp_flags;    // for TCP only: SYN/ACK/FIN/RST bits
+    __u8  dscp_ecn;     // IPv4 TOS or IPv6 traffic class snapshot
+};
+
 struct flow_stats {
     __u64 packets;
     __u64 bytes;
@@ -52,6 +61,78 @@ struct {
     __type(key,   struct flow_key);
     __type(value, struct flow_stats);
 } flow_statistics SEC(".maps");
+
+// ---- 新增：每個 flow 的 16 筆最近封包 ring ----
+#define RECENT_PKT_RING_SIZE 16
+#define RECENT_PKT_RING_MASK (RECENT_PKT_RING_SIZE - 1)
+
+struct pkt_ring {
+    // TODO:移除自旋鎖，避免需要 BTF 支持
+    // struct bpf_spin_lock lock;
+    __u32 head;                             // 逐步遞增的寫入計數
+    __u32 count;                            // 已填入的有效數 (<=16)
+    struct pkt_rec recs[RECENT_PKT_RING_SIZE];
+};
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 131072);            // 與 flow_statistics 同級
+    __type(key,   struct flow_key);
+    __type(value, struct pkt_ring);
+} flow_recent_pkts SEC(".maps");
+
+/**
+ * @brief Push a packet record into the ring buffer for a specific flow
+ * 
+ * @param key Flow key identifying the specific flow
+ * @param pkt_rec Packet record to be added to the ring buffer
+ * @return 0 on success, negative value on error
+ */
+static int ring_push(struct flow_key *key, struct pkt_rec *rec) {
+    struct pkt_ring *ring;
+    struct pkt_ring new_ring = {};
+    
+    // 初始化新 ring 的值
+    new_ring.head = 0;
+    new_ring.count = 0;
+    
+    // Try to look up existing ring
+    ring = bpf_map_lookup_elem(&flow_recent_pkts, key);
+    if (ring) {
+        // TODO:不再需要鎖操作
+        // bpf_spin_lock(&ring->lock);
+        
+        // Calculate the position to write the new record
+        __u32 pos = ring->head & RECENT_PKT_RING_MASK;
+        
+        // Copy the record into the ring
+        ring->recs[pos] = *rec;
+        
+        // Increment head for next write
+        ring->head++;
+        
+        // Update count (cap at RECENT_PKT_RING_SIZE)
+        if (ring->count < RECENT_PKT_RING_SIZE) {
+            ring->count++;
+        }
+        
+        // TODO: 不再需要解鎖操作
+        // bpf_spin_unlock(&ring->lock);
+        
+        bpf_debug("Updated packet ring: pos=%u, count=%u\n", pos, ring->count);
+    } else {
+        // Create a new ring with the first packet
+        new_ring.head = 1;  // First entry at position 0
+        new_ring.count = 1;
+        new_ring.recs[0] = *rec;  // Copy the record into the first position
+        
+        // Add the new ring to the map
+        bpf_map_update_elem(&flow_recent_pkts, key, &new_ring, BPF_ANY);
+        bpf_debug("Created new packet ring for flow\n");
+    }
+    
+    return 0;
+}
 
 /**
  * @brief Record flow information to the LRU hash map
@@ -108,6 +189,27 @@ static int record_flow(struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, 
         bpf_debug("New flow DST: %u:%u\n", 
                  bpf_ntohl(iph->daddr) & 0xFF, bpf_ntohs(dport));
     }
+    
+    // Create a packet record for the ring buffer
+    struct pkt_rec pkt_record = {};
+    pkt_record.ts_ns = ts;
+    pkt_record.len = pkt_len;
+    pkt_record.l4 = proto;
+    pkt_record.dir = 0;  // Can be set appropriately if direction is known
+    
+    // For TCP, optionally capture TCP flags if available
+    if (proto == IPPROTO_TCP) {
+        // This would require access to the TCP header, which we don't have here
+        // Would need to be passed in from the caller
+        pkt_record.tcp_flags = 0;
+    }
+    
+    // Capture DSCP/ECN from IP header
+    pkt_record.dscp_ecn = (iph->tos & 0xFF);
+    
+    // Push the packet record into the ring buffer for this flow
+    bpf_debug("Attempt to push packet record to ring buffer\n");
+    ring_push(&key, &pkt_record);
     
     return 0;
 }

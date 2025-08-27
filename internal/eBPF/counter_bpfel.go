@@ -37,6 +37,19 @@ type counterFlowStats struct {
 	LastTsNs  uint64
 }
 
+type counterPktRing struct {
+	Head  uint32
+	Count uint32
+	Recs  [16]struct {
+		TsNs     uint64
+		Len      uint32
+		L4       uint8
+		Dir      uint8
+		TcpFlags uint8
+		DscpEcn  uint8
+	}
+}
+
 // loadCounter returns the embedded CollectionSpec for counter.
 func loadCounter() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_CounterBytes)
@@ -86,6 +99,7 @@ type counterProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type counterMapSpecs struct {
+	FlowRecentPkts *ebpf.MapSpec `ebpf:"flow_recent_pkts"`
 	FlowStatistics *ebpf.MapSpec `ebpf:"flow_statistics"`
 }
 
@@ -115,11 +129,13 @@ func (o *counterObjects) Close() error {
 //
 // It can be passed to loadCounterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type counterMaps struct {
+	FlowRecentPkts *ebpf.Map `ebpf:"flow_recent_pkts"`
 	FlowStatistics *ebpf.Map `ebpf:"flow_statistics"`
 }
 
 func (m *counterMaps) Close() error {
 	return _CounterClose(
+		m.FlowRecentPkts,
 		m.FlowStatistics,
 	)
 }
