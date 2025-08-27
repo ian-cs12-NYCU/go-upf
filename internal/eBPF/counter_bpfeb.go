@@ -12,11 +12,29 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type counterConnTuple struct {
-	SrcIp   uint32
-	DstIp   uint32
-	SrcPort uint16
-	DstPort uint16
+type counterFlowKey struct {
+	Family uint8
+	Proto  uint8
+	Pad    uint16
+	_      [4]byte
+	Addrs  struct {
+		Saddr   uint32
+		Daddr   uint32
+		SaddrHi uint64
+		SaddrLo uint64
+		DaddrHi uint64
+		DaddrLo uint64
+	}
+	Sport uint16
+	Dport uint16
+	_     [4]byte
+}
+
+type counterFlowStats struct {
+	Packets   uint64
+	Bytes     uint64
+	FirstTsNs uint64
+	LastTsNs  uint64
 }
 
 // loadCounter returns the embedded CollectionSpec for counter.
@@ -68,7 +86,7 @@ type counterProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type counterMapSpecs struct {
-	ConntrackMap *ebpf.MapSpec `ebpf:"conntrack_map"`
+	FlowStatistics *ebpf.MapSpec `ebpf:"flow_statistics"`
 }
 
 // counterVariableSpecs contains global variables before they are loaded into the kernel.
@@ -97,12 +115,12 @@ func (o *counterObjects) Close() error {
 //
 // It can be passed to loadCounterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type counterMaps struct {
-	ConntrackMap *ebpf.Map `ebpf:"conntrack_map"`
+	FlowStatistics *ebpf.Map `ebpf:"flow_statistics"`
 }
 
 func (m *counterMaps) Close() error {
 	return _CounterClose(
-		m.ConntrackMap,
+		m.FlowStatistics,
 	)
 }
 

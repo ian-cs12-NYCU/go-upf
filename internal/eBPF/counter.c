@@ -19,24 +19,102 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 #define MAX_MAP_ENTRIES 16
 
  
-struct conn_tuple {
-    __be32 src_ip;
-    __be32 dst_ip;
-    __be16 src_port;
-    __be16 dst_port;
+struct flow_key {
+    __u8  family;     // 4: IPv4, 6: IPv6
+    __u8  proto;      // IPPROTO_TCP/UDP/ICMP...
+    __u16 pad;        // For alignment
+    // Changed anonymous union to named structure
+    struct {
+        __u32 saddr;  // v4 source address
+        __u32 daddr;  // v4 destination address
+        // IPv6 support preserved but not using anonymous union
+        __u64 saddr_hi; // v6 high bits
+        __u64 saddr_lo; // v6 low bits
+        __u64 daddr_hi; // v6 high bits
+        __u64 daddr_lo; // v6 low bits
+    } addrs;
+    __u16 sport;      // source port
+    __u16 dport;      // destination port
+};
+
+struct flow_stats {
+    __u64 packets;
+    __u64 bytes;
+    __u64 first_ts_ns;
+    __u64 last_ts_ns;
 };
 
 
-// Use an LRU hash map to track packet counts for each connection 4-tuple
+// LRU Hash: Automatically evicts inactive flows, controls memory usage.
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, MAX_MAP_ENTRIES);
-    __type(key, struct conn_tuple);
-    __type(value, __u64);  // Use __u64 for large packet counts
-} conntrack_map SEC(".maps");
+    __uint(max_entries, 131072);         // Adjust based on node memory/traffic (128K entries)
+    __type(key,   struct flow_key);
+    __type(value, struct flow_stats);
+} flow_statistics SEC(".maps");
+
+/**
+ * @brief Record flow information to the LRU hash map
+ * This function extracts the 5-tuple (src/dst IP, src/dst port, protocol) from the packet
+ * and updates the flow statistics in the map.
+ * 
+ * @param ctx XDP context
+ * @param iph IP header
+ * @param proto Protocol (TCP/UDP)
+ * @param sport Source port
+ * @param dport Destination port
+ * @param pkt_len Packet length in bytes
+ * @return 0 on success, negative value on error
+ */
+static int record_flow(struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, __u32 pkt_len) {
+    struct flow_key key = {};
+    struct flow_stats *stats, new_stats = {};
+    __u64 ts = bpf_ktime_get_ns();
+    
+    // Fill in the 5-tuple key
+    key.family = 4;  // IPv4
+    key.proto = proto;
+    key.pad = 0;
+    key.addrs.saddr = iph->saddr;
+    key.addrs.daddr = iph->daddr;
+    key.sport = sport;
+    key.dport = dport;
+    
+    // Look for existing entry
+    stats = bpf_map_lookup_elem(&flow_statistics, &key);
+    if (stats) {
+        // Update existing stats
+        stats->packets++;
+        stats->bytes += pkt_len;
+        stats->last_ts_ns = ts;
+        bpf_debug("Updated flow: proto=%u, packets=%llu, bytes=%llu\n", 
+                  proto, stats->packets, stats->bytes);
+    } else {
+        // Create new stats
+        new_stats.packets = 1;
+        new_stats.bytes = pkt_len;
+        new_stats.first_ts_ns = ts;
+        new_stats.last_ts_ns = ts;
+        bpf_map_update_elem(&flow_statistics, &key, &new_stats, BPF_ANY);
+        bpf_debug("New flow: proto=%u\n", proto);
+        bpf_debug("New flow SRC: %u.%u.%u\n",
+                 (bpf_ntohl(iph->saddr) >> 24) & 0xFF, (bpf_ntohl(iph->saddr) >> 16) & 0xFF,
+                 (bpf_ntohl(iph->saddr) >> 8) & 0xFF);
+        bpf_debug("New flow SRC: %u:%u\n", 
+                 bpf_ntohl(iph->saddr) & 0xFF, bpf_ntohs(sport));
+        bpf_debug("New flow DST: %u.%u.%u\n",
+                 (bpf_ntohl(iph->daddr) >> 24) & 0xFF, (bpf_ntohl(iph->daddr) >> 16) & 0xFF,
+                 (bpf_ntohl(iph->daddr) >> 8) & 0xFF);
+        bpf_debug("New flow DST: %u:%u\n", 
+                 bpf_ntohl(iph->daddr) & 0xFF, bpf_ntohs(dport));
+    }
+    
+    return 0;
+}
 
 static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
     void *p_data_end = (void*)(long)ctx->data_end;
+    void *p_data = (void*)(long)ctx->data;
 
     if ((void*)iph + sizeof(*iph) > p_data_end) {
         bpf_debug("Invalid inner IPv4 header\n");
@@ -56,9 +134,52 @@ static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
     bpf_debug("inner IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
     bpf_debug("inner IPv4 dst: %u", ip_dest & 0xFF);
 
+    // Process inner protocol (TCP/UDP/ICMP)
+    if (iph->protocol == IPPROTO_UDP || iph->protocol == IPPROTO_TCP) {
+        void *transport_hdr = (void*)iph + sizeof(*iph);
+        __u16 src_port = 0;
+        __u16 dst_port = 0;
+        
+        // Check header boundary
+        if (transport_hdr + 4 <= p_data_end) { // Only need first 4 bytes for ports
+            // Both TCP and UDP have source port at offset 0 and dest port at offset 2
+            src_port = bpf_ntohs(*((__u16 *)transport_hdr));
+            dst_port = bpf_ntohs(*((__u16 *)(transport_hdr + 2)));
+            __u32 pkt_len = p_data_end - p_data;
+            
+            // Record flow statistics (works for both UDP and TCP)
+            record_flow(iph, iph->protocol, src_port, dst_port, pkt_len);
+            
+            // Log info about the flow (protocol type is already in the record_flow debug output)
+            bpf_debug("Recorded inner %s flow for ports: %u -> %u\n", 
+                    (iph->protocol == IPPROTO_UDP) ? "UDP" : "TCP", 
+                    src_port, dst_port);
+        }
+    } else if (iph->protocol == IPPROTO_ICMP) {
+        // For ICMP, we don't have ports, but we can use type and code instead
+        struct icmphdr {
+            __u8 type;
+            __u8 code;
+            __u16 checksum;
+            // Rest of the header varies by type and code
+        } __attribute__((packed));
+        
+        struct icmphdr *icmp = (struct icmphdr *)((void*)iph + sizeof(*iph));
+        if ((void*)icmp + sizeof(*icmp) <= p_data_end) {
+            __u32 pkt_len = p_data_end - p_data;
+            
+            // For ICMP, use type as "source port" and code as "destination port"
+            // This is just for storage in the flow_key structure
+            __u16 type = icmp->type;
+            __u16 code = icmp->code;
+            
+            record_flow(iph, IPPROTO_ICMP, type, code, pkt_len);
+            bpf_debug("Recorded inner ICMP flow: type=%u, code=%u\n", type, code);
+        }
+    } 
+
     return XDP_PASS;
 }
-
 
 static __u32 gtp_handle(struct xdp_md* ctx, const void* gtpuh) {
     void *data_end = (void*)(long)ctx->data_end;
@@ -94,7 +215,7 @@ static __u32 udp_handle(struct xdp_md *ctx, struct udphdr *udph)
         return XDP_ABORTED;
     }
 
-    __u32 dest_port = htons(udph->dest);
+    __u32 dest_port = bpf_ntohs(udph->dest);
     
     switch(dest_port) {
     case GTP_UDP_PORT:
@@ -133,8 +254,6 @@ static __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph) {
     bpf_debug("IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
     bpf_debug("IPv4 dst: %u", ip_dest & 0xFF);
 
-
-    
     switch (iph->protocol) {
         case IPPROTO_UDP:
             bpf_debug("UDP packet\n");
@@ -142,7 +261,7 @@ static __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph) {
             udp_handle(ctx, udp_hdr);
             break;
         case IPPROTO_TCP:
-            bpf_debug("TCP packet not supported now\n");
+            bpf_debug("TCP packet\n");
             break;
         default:
             bpf_debug("Unknown IPv4 protocol\n");

@@ -17,7 +17,7 @@ type ConnTuple struct {
 	DstIP   net.IP
 	SrcPort uint16
 	DstPort uint16
-	Cnt    int
+	Cnt     int
 }
 
 // Attach the eBPF program to the network interface (XDP).
@@ -62,26 +62,30 @@ func (e *EbpfProbe) detachCounter() error {
 	return nil
 }
 
-
-// TODO: Implement the function to get the eBPF map contents
+// GetConuterConnTuple retrieves connection tuples and statistics from the eBPF map
 func (e *EbpfProbe) GetConuterConnTuple() (conn []ConnTuple, err error) {
-
-	connMap, err := e.CounterObj.ConntrackMap.Clone()
+	// Clone the map to safely iterate over it
+	connMap, err := e.CounterObj.FlowStatistics.Clone()
 	if err != nil {
-		return []ConnTuple{}, fmt.Errorf("cloning conntrack map: %s", err)
+		return []ConnTuple{}, fmt.Errorf("cloning flow statistics map: %s", err)
 	}
 
-	var key counterConnTuple
-	var value uint64
+	// Define variables for key and value
+	var key counterFlowKey
+	var value counterFlowStats
+
+	// Iterate through all entries in the map
 	iter := connMap.Iterate()
 	for iter.Next(&key, &value) {
 		logger.EbpfLog.Traceln("key: ", key, "value: ", value)
+
+		// Create a ConnTuple from the map entry
 		conn = append(conn, ConnTuple{
-			SrcIP:   uint32ToIP(key.SrcIp),
-			SrcPort: ntohs(key.SrcPort),
-			DstIP:   uint32ToIP(key.DstIp),
-			DstPort: ntohs(key.DstPort),
-			Cnt:    int(value),
+			SrcIP:   uint32ToIP(key.Addrs.Saddr),
+			SrcPort: ntohs(key.Sport),
+			DstIP:   uint32ToIP(key.Addrs.Daddr),
+			DstPort: ntohs(key.Dport),
+			Cnt:     int(value.Packets), // Using packet count as the counter
 		})
 	}
 	return conn, nil

@@ -1,7 +1,10 @@
 package ebpf_probe
 
+// The following go:generate commands are used to generate .o and .go files:
+// - Normal mode: generates counter_bpfel.o, counter_bpfeb.o, counter_bpfel.go, counter_bpfeb.go
+
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go counter counter.c -- -I../headers
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "-DDEBUG" counter_debug counter.c -- -I../headers
+
 
 import (
 	// "context"

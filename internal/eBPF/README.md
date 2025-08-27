@@ -1,7 +1,10 @@
 ## How to use
 ```
 $ cd ./internal/eBPF
-$ go generate
+$ go generate 
+
+// make UPF in free5gc directory
+$ make upf
 ```
 
 ## Test API
