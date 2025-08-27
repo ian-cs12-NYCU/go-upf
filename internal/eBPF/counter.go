@@ -39,7 +39,7 @@ func (e *EbpfProbe) attachCounter() error {
 
 	// Attach the program.
 	e.CounterXDPLink, err = link.AttachXDP(link.XDPOptions{
-		Program:   e.CounterObj.XdpProgFunc,
+		Program:   e.CounterObj.XdpProgramEntrypoint,
 		Interface: iface.Index,
 	})
 	if err != nil {

@@ -61,7 +61,7 @@ type counterSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type counterProgramSpecs struct {
-	XdpProgFunc *ebpf.ProgramSpec `ebpf:"xdp_prog_func"`
+	XdpProgramEntrypoint *ebpf.ProgramSpec `ebpf:"xdp_program_entrypoint"`
 }
 
 // counterMapSpecs contains maps before they are loaded into the kernel.
@@ -116,12 +116,12 @@ type counterVariables struct {
 //
 // It can be passed to loadCounterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type counterPrograms struct {
-	XdpProgFunc *ebpf.Program `ebpf:"xdp_prog_func"`
+	XdpProgramEntrypoint *ebpf.Program `ebpf:"xdp_program_entrypoint"`
 }
 
 func (p *counterPrograms) Close() error {
 	return _CounterClose(
-		p.XdpProgFunc,
+		p.XdpProgramEntrypoint,
 	)
 }
 
