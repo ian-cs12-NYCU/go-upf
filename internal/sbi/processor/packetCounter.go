@@ -15,7 +15,7 @@ func (p *Processor) PacketCounterGetProcedure(c *gin.Context) {
 		return
 	}
 
-	connTuple, err := p.GetEbpfProbe().GetConuterConnTuple()
+	flows, err := p.GetEbpfProbe().GetConuterConnTuple()
 	if err != nil {
 		logger.SBILog.Errorf("Get counter conn tuple failed: %+v", err)
 		c.JSON(500, gin.H{
@@ -23,6 +23,6 @@ func (p *Processor) PacketCounterGetProcedure(c *gin.Context) {
 		})
 	}
 	c.JSON(200, gin.H{
-		"connList": connTuple,
+		"connList": flows,
 	})
 }
