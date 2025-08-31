@@ -31,6 +31,42 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Pattern: "/packets-count",
 			APIFunc: s.UpfOamPacketsCountGet,
 		},
+		{
+			Name:    "SourceIPsGet",
+			Method:  http.MethodGet,
+			Pattern: "/source-ips",
+			APIFunc: s.UpfOamSourceIPsGet,
+		},
+		{
+			Name:    "SourceIPByIPGet",
+			Method:  http.MethodGet,
+			Pattern: "/source-ips/:ip",
+			APIFunc: s.UpfOamSourceIPByIPGet,
+		},
+		{
+			Name:    "SourceIPsCountGet",
+			Method:  http.MethodGet,
+			Pattern: "/source-ips/count",
+			APIFunc: s.UpfOamSourceIPsCountGet,
+		},
+		{
+			Name:    "TopSourceIPsGet",
+			Method:  http.MethodGet,
+			Pattern: "/source-ips/top",
+			APIFunc: s.UpfOamTopSourceIPsGet,
+		},
+		{
+			Name:    "SourceIPsStatsGet",
+			Method:  http.MethodGet,
+			Pattern: "/source-ips/stats",
+			APIFunc: s.UpfOamSourceIPsStatsGet,
+		},
+		{
+			Name:    "SourceIPsClear",
+			Method:  http.MethodDelete,
+			Pattern: "/source-ips",
+			APIFunc: s.UpfOamSourceIPsClear,
+		},
 	}
 }
 
@@ -45,4 +81,34 @@ func (s *Server) UpfOamNfResourceGet(c *gin.Context) {
 
 func (s *Server) UpfOamPacketsCountGet(c *gin.Context) {
 	s.processor.PacketCounterGetProcedure(c)
+}
+
+// UpfOamSourceIPsGet handles GET /source-ips - retrieves all UL source IPs
+func (s *Server) UpfOamSourceIPsGet(c *gin.Context) {
+	s.processor.GetAllULSourceIPs(c)
+}
+
+// UpfOamSourceIPByIPGet handles GET /source-ips/{ip} - retrieves specific UL source IP info
+func (s *Server) UpfOamSourceIPByIPGet(c *gin.Context) {
+	s.processor.GetULSourceIPByIP(c)
+}
+
+// UpfOamSourceIPsCountGet handles GET /source-ips/count - returns count of tracked source IPs
+func (s *Server) UpfOamSourceIPsCountGet(c *gin.Context) {
+	s.processor.GetULSourceIPsCount(c)
+}
+
+// UpfOamTopSourceIPsGet handles GET /source-ips/top - returns top N source IPs by packet count
+func (s *Server) UpfOamTopSourceIPsGet(c *gin.Context) {
+	s.processor.GetTopULSourceIPs(c)
+}
+
+// UpfOamSourceIPsStatsGet handles GET /source-ips/stats - returns summary statistics
+func (s *Server) UpfOamSourceIPsStatsGet(c *gin.Context) {
+	s.processor.GetULSourceIPsStats(c)
+}
+
+// UpfOamSourceIPsClear handles DELETE /source-ips - clears all tracked source IPs
+func (s *Server) UpfOamSourceIPsClear(c *gin.Context) {
+	s.processor.ClearULSourceIPs(c)
 }

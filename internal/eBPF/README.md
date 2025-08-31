@@ -9,7 +9,8 @@ $ make upf
 
 ## Test API
 ```
-$ curl 127.0.0.8:8000/nwdaf-oam/packets-count
+$ curl 127.0.0.8:8000/nwdaf-oam/packets-count | jq
+$ curl 127.0.0.8:8000/nwdaf-oam/source-ips | jq
 ```
 
 ```

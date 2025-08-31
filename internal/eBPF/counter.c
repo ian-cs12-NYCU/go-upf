@@ -25,6 +25,14 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // Global variable to track current processing direction
 static __u8 current_direction = 0;
 
+struct pkt_rec {
+    __u64 ts_ns;        // capture time (monotonic)
+    __u32 len;          // packet length
+    __u8  l4;           // L4 proto (e.g., IPPROTO_TCP/UDP)
+    __u8  dir;          // 0=unknown, 1=ingress, 2=egress (or UL/DL)
+    __u8  tcp_flags;    // for TCP only: SYN/ACK/FIN/RST bits
+    __u8  dscp_ecn;     // IPv4 TOS or IPv6 traffic class snapshot
+};
  
 struct flow_key {
     __u8  family;     // 4: IPv4, 6: IPv6
@@ -44,15 +52,6 @@ struct flow_key {
     __u16 dport;      // destination port
 };
 
-struct pkt_rec {
-    __u64 ts_ns;        // capture time (monotonic)
-    __u32 len;          // packet length
-    __u8  l4;           // L4 proto (e.g., IPPROTO_TCP/UDP)
-    __u8  dir;          // 0=unknown, 1=ingress, 2=egress (or UL/DL)
-    __u8  tcp_flags;    // for TCP only: SYN/ACK/FIN/RST bits
-    __u8  dscp_ecn;     // IPv4 TOS or IPv6 traffic class snapshot
-};
-
 struct flow_stats {
     __u64 packets;
     __u64 bytes;
@@ -60,6 +59,18 @@ struct flow_stats {
     __u64 last_ts_ns;
 };
 
+// ---- LPM Trie for UL source IP tracking ----
+struct ip_key {
+    __u32 prefixlen;    // Prefix length (32 for exact match)
+    __u32 addr;         // IPv4 address in network byte order
+};
+
+struct ip_info {
+    __u64 first_seen_ts;    // First time this IP was seen
+    __u64 last_seen_ts;     // Last time this IP was seen
+    __u64 packet_count;     // Number of packets from this IP
+    __u64 byte_count;       // Number of bytes from this IP
+};
 
 // LRU Hash: Automatically evicts inactive flows, controls memory usage.
 struct {
@@ -87,6 +98,62 @@ struct {
     __type(key,   struct flow_key);
     __type(value, struct pkt_ring);
 } flow_recent_pkts SEC(".maps");
+
+// ---- LPM Trie for tracking UL source IPs ----
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 65536);             // 64K entries for source IPs
+    __uint(map_flags, BPF_F_NO_PREALLOC);   // Dynamic allocation
+    __type(key, struct ip_key);
+    __type(value, struct ip_info);
+} ul_source_ips SEC(".maps");
+
+/**
+ * @brief Record UL source IP in LPM trie
+ * This function tracks source IPs that appear in UL traffic
+ * 
+ * @param src_ip Source IP address in network byte order
+ * @param pkt_len Packet length for statistics
+ * @return 0 on success, negative value on error
+ */
+static __always_inline int record_ul_source_ip(struct iphdr *iph, __u32 pkt_len) {
+    struct ip_key key = {};
+    struct ip_info *info, new_info = {};
+    __u64 ts = bpf_ktime_get_ns();
+    
+    // Set up the key for exact IP match
+    key.prefixlen = 32;  // Exact match for IPv4
+    key.addr = iph->saddr;  // Already in network byte order
+    
+    // Look for existing entry
+    info = bpf_map_lookup_elem(&ul_source_ips, &key);
+    if (info) {
+        // Update existing entry
+        info->last_seen_ts = ts;
+        info->packet_count++;
+        info->byte_count += pkt_len;
+        bpf_debug("Updated UL source IP: packets=%llu, bytes=%llu\n", 
+                  info->packet_count, info->byte_count);
+    } else {
+        // Create new entry
+        new_info.first_seen_ts = ts;
+        new_info.last_seen_ts = ts;
+        new_info.packet_count = 1;
+        new_info.byte_count = pkt_len;
+        
+        int ret = bpf_map_update_elem(&ul_source_ips, &key, &new_info, BPF_ANY);
+        if (ret == 0) {
+            __u32 ip_host = bpf_ntohl(iph->saddr);
+            bpf_debug("New UL source IP recorded: %u.%u.%u", 
+                     (ip_host >> 24) & 0xFF, (ip_host >> 16) & 0xFF, (ip_host >> 8) & 0xFF);
+            bpf_debug("New UL source IP recorded: %u\n", ip_host & 0xFF);
+        } else {
+            bpf_debug("Failed to add UL source IP: ret=%d\n", ret);
+        }
+    }
+    
+    return 0;
+}
 
 /**
  * @brief Push a packet record into the ring buffer for a specific flow
@@ -233,6 +300,10 @@ static __always_inline __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr 
     bpf_debug("inner IPv4 src: %u", ip_src & 0xFF);
     bpf_debug("inner IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
     bpf_debug("inner IPv4 dst: %u", ip_dest & 0xFF);
+
+    // Record UL source IP in LPM trie (this is inner IP, so it's the real user IP)
+    __u32 pkt_len = p_data_end - p_data;
+    record_ul_source_ip(iph, pkt_len);
 
     // Process inner protocol (TCP/UDP/ICMP)
     if (iph->protocol == IPPROTO_UDP || iph->protocol == IPPROTO_TCP) {

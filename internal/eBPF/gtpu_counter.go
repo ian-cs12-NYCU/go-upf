@@ -1,42 +1,35 @@
 package ebpf_probe
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/free5gc/go-upf/internal/logger"
+	"github.com/free5gc/go-upf/pkg/utils"
 )
-
-// TimeStamp represents a timestamp with multiple formats for different use cases
-type TimeStamp struct {
-	NanoSeconds uint64 `json:"ns"`        // Raw timestamp in nanoseconds since system boot, useful for precise calculations and comparisons
-	Formatted   string `json:"formatted"` // ISO 8601/RFC3339 formatted timestamp in UTC, standard for distributed systems and APIs
-}
 
 // PacketRecord represents a record of a packet
 type PacketRecord struct {
-	TS        TimeStamp `json:"timestamp"` // Timestamp with multiple formats
-	Length    uint32    `json:"length"`    // Packet length
-	Protocol  uint8     `json:"protocol"`  // L4 protocol (TCP/UDP etc.)
-	Direction uint8     `json:"direction"` // Direction (0=unknown, 1=ingress, 2=egress)
-	TCPFlags  uint8     `json:"tcpFlags"`  // TCP flags (if applicable)
-	DSCP_ECN  uint8     `json:"dscpEcn"`   // DSCP/ECN value
+	TS        utils.TimeStamp `json:"timestamp"` // Timestamp with multiple formats
+	Length    uint32          `json:"length"`    // Packet length
+	Protocol  uint8           `json:"protocol"`  // L4 protocol (TCP/UDP etc.)
+	Direction uint8           `json:"direction"` // Direction (0=unknown, 1=ingress, 2=egress)
+	TCPFlags  uint8           `json:"tcpFlags"`  // TCP flags (if applicable)
+	DSCP_ECN  uint8           `json:"dscpEcn"`   // DSCP/ECN value
 }
 
 // Flows stores connection information and statistics
 type Flows struct {
-	SrcIP      net.IP         `json:"srcIP"`      // Source IP
-	DstIP      net.IP         `json:"dstIP"`      // Destination IP
-	SrcPort    uint16         `json:"srcPort"`    // Source port
-	DstPort    uint16         `json:"dstPort"`    // Destination port
-	Cnt        int            `json:"cnt"`        // Packet count
-	Bytes      uint64         `json:"bytes"`      // Total traffic (bytes)
-	FirstTS    TimeStamp      `json:"firstTime"`  // First packet timestamp
-	LastTS     TimeStamp      `json:"lastTime"`   // Last packet timestamp
-	RecentPkts []PacketRecord `json:"recentPkts"` // Recent packet records (ring buffer)
+	SrcIP      net.IP          `json:"srcIP"`      // Source IP
+	DstIP      net.IP          `json:"dstIP"`      // Destination IP
+	SrcPort    uint16          `json:"srcPort"`    // Source port
+	DstPort    uint16          `json:"dstPort"`    // Destination port
+	Cnt        int             `json:"cnt"`        // Packet count
+	Bytes      uint64          `json:"bytes"`      // Total traffic (bytes)
+	FirstTS    utils.TimeStamp `json:"firstTime"`  // First packet timestamp
+	LastTS     utils.TimeStamp `json:"lastTime"`   // Last packet timestamp
+	RecentPkts []PacketRecord  `json:"recentPkts"` // Recent packet records (ring buffer)
 }
 
 // Attach the eBPF program to the network interface (XDP).
@@ -107,26 +100,7 @@ func (e *EbpfProbe) detachCounter() error {
 	return nil
 }
 
-// formatTimeStamp creates a TimeStamp struct from a nanosecond timestamp
-func formatTimeStamp(ts uint64) TimeStamp {
-	// Convert nanoseconds to milliseconds for better readability
-	ms := ts / 1000000
-
-	// Get current system uptime (seconds)
-	uptime := time.Now().Unix() - int64(time.Now().Sub(time.Now().Truncate(24*time.Hour)).Seconds())
-
-	// Estimate the actual time corresponding to the timestamp
-	// Note: This is only an approximation as we don't know the exact system boot time
-	approxTime := time.Unix(uptime, 0).Add(time.Duration(ms) * time.Millisecond)
-
-	// Format to ISO 8601/RFC3339 format (UTC) for standard compatibility in distributed systems
-	formattedTime := approxTime.UTC().Format(time.RFC3339Nano)
-
-	return TimeStamp{
-		NanoSeconds: ts,
-		Formatted:   formattedTime,
-	}
-} // GetConuterConnTuple retrieves connection tuples and statistics from the eBPF map
+// GetConuterConnTuple retrieves connection tuples and statistics from the eBPF map
 func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 	// Clone the map to safely iterate over it
 	connMap, err := e.CounterObj.FlowStatistics.Clone()
@@ -152,14 +126,14 @@ func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 
 		// Create a new Flows instance
 		ct := Flows{
-			SrcIP:   uint32ToIP(key.Addrs.Saddr),
-			SrcPort: ntohs(key.Sport),
-			DstIP:   uint32ToIP(key.Addrs.Daddr),
-			DstPort: ntohs(key.Dport),
-			Cnt:     int(value.Packets),               // Use packet count
-			Bytes:   value.Bytes,                      // Total bytes
-			FirstTS: formatTimeStamp(value.FirstTsNs), // First packet timestamp
-			LastTS:  formatTimeStamp(value.LastTsNs),  // Last packet timestamp
+			SrcIP:   utils.Uint32ToIP(key.Addrs.Saddr),
+			SrcPort: utils.Ntohs(key.Sport),
+			DstIP:   utils.Uint32ToIP(key.Addrs.Daddr),
+			DstPort: utils.Ntohs(key.Dport),
+			Cnt:     int(value.Packets),                     // Use packet count
+			Bytes:   value.Bytes,                            // Total bytes
+			FirstTS: utils.FormatTimeStamp(value.FirstTsNs), // First packet timestamp
+			LastTS:  utils.FormatTimeStamp(value.LastTsNs),  // Last packet timestamp
 		}
 
 		// Try to get the packet ring buffer for this flow
@@ -186,7 +160,7 @@ func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 				rec := pktRing.Recs[idx]
 
 				ct.RecentPkts = append(ct.RecentPkts, PacketRecord{
-					TS:        formatTimeStamp(rec.TsNs), // Timestamp with multiple formats
+					TS:        utils.FormatTimeStamp(rec.TsNs), // Timestamp with multiple formats
 					Length:    rec.Len,
 					Protocol:  rec.L4,
 					Direction: rec.Dir,
@@ -203,14 +177,4 @@ func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 		flows = append(flows, ct)
 	}
 	return flows, nil
-}
-
-func uint32ToIP(ip uint32) net.IP {
-	ipBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(ipBytes, ip)
-	return net.IP(ipBytes)
-}
-
-func ntohs(n uint16) uint16 {
-	return (n>>8)&0xff | (n&0xff)<<8
 }

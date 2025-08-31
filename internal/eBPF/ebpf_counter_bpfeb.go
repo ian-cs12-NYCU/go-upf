@@ -37,6 +37,18 @@ type ebpf_counterFlowStats struct {
 	LastTsNs  uint64
 }
 
+type ebpf_counterIpInfo struct {
+	FirstSeenTs uint64
+	LastSeenTs  uint64
+	PacketCount uint64
+	ByteCount   uint64
+}
+
+type ebpf_counterIpKey struct {
+	Prefixlen uint32
+	Addr      uint32
+}
+
 type ebpf_counterPktRing struct {
 	Head  uint32
 	Count uint32
@@ -102,6 +114,7 @@ type ebpf_counterProgramSpecs struct {
 type ebpf_counterMapSpecs struct {
 	FlowRecentPkts *ebpf.MapSpec `ebpf:"flow_recent_pkts"`
 	FlowStatistics *ebpf.MapSpec `ebpf:"flow_statistics"`
+	UlSourceIps    *ebpf.MapSpec `ebpf:"ul_source_ips"`
 }
 
 // ebpf_counterVariableSpecs contains global variables before they are loaded into the kernel.
@@ -132,12 +145,14 @@ func (o *ebpf_counterObjects) Close() error {
 type ebpf_counterMaps struct {
 	FlowRecentPkts *ebpf.Map `ebpf:"flow_recent_pkts"`
 	FlowStatistics *ebpf.Map `ebpf:"flow_statistics"`
+	UlSourceIps    *ebpf.Map `ebpf:"ul_source_ips"`
 }
 
 func (m *ebpf_counterMaps) Close() error {
 	return _Ebpf_counterClose(
 		m.FlowRecentPkts,
 		m.FlowStatistics,
+		m.UlSourceIps,
 	)
 }
 
