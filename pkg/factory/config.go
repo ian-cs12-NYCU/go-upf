@@ -75,9 +75,10 @@ type DnnList struct {
 }
 
 type EbpfConfig struct {
-	Enable        bool   `yaml:"enable" valid:"optional"`
-	InterfaceName string `yaml:"interfaceName" valid:"optional" `
-	DebugMode     bool   `yaml:"debugmode" valid:"optional"`
+	Enable           bool   `yaml:"enable" valid:"optional"`
+	UL_InterfaceName string `yaml:"ul_interfaceName" valid:"optional"`
+	DL_InterfaceName string `yaml:"dl_interfaceName" valid:"optional"`
+	DebugMode        bool   `yaml:"debugmode" valid:"optional"`
 }
 
 type Logger struct {

@@ -1,10 +1,6 @@
 package ebpf_probe
 
-// The following go:generate commands are used to generate .o and .go files:
-// - Normal mode: generates counter_bpfel.o, counter_bpfeb.o, counter_bpfel.go, counter_bpfeb.go
-
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go counter counter.c -- -I../headers
-
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go ebpf_counter counter.c
 
 import (
 	// "context"
@@ -21,9 +17,11 @@ type Upf interface {
 
 type EbpfProbe struct {
 	Upf
-	XdpIfName      string // XDP interface name
-	CounterObj     counterObjects
-	CounterXDPLink link.Link
+	XdpULIfName      string `json:"xdpULIfName"` // Network interface name for uplink (XDP)
+	XdpDLIfName      string `json:"xdpDLIfName"` // Network interface name for downlink (XDP)
+	CounterObj       ebpf_counterObjects
+	CounterULXDPLink link.Link // XDP link for uplink interface
+	CounterDLXDPLink link.Link // XDP link for downlink interface
 }
 
 func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
@@ -34,16 +32,18 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 	logger.EbpfLog.Infoln("eBPF is enabled in the configuration. Initializing eBPF probe.")
 
 	e := &EbpfProbe{
-		Upf:       upf,
-		XdpIfName: upf.Config().Ebpf.InterfaceName,
+		Upf:         upf,
+		XdpULIfName: upf.Config().Ebpf.UL_InterfaceName,
+		XdpDLIfName: upf.Config().Ebpf.DL_InterfaceName,
 	}
 
 	// Attach the eBPF program to the network interface.
 	if err := e.attachCounter(); err != nil {
 		return nil, err
 	}
-	logger.EbpfLog.Traceln("eBPF Probe attached to interface ", e.XdpIfName)
-	logger.EbpfLog.Traceln("Check: \n\t\tCounterObj: ", e.CounterObj, " \n\t\tCounterXDPLink: ", e.CounterXDPLink)
+	logger.EbpfLog.Traceln("eBPF Probe attached to interface (UL)", e.XdpULIfName)
+	logger.EbpfLog.Traceln("eBPF Probe attached to interface (DL)", e.XdpDLIfName)
+	logger.EbpfLog.Traceln("Check: \n\t\tCounterObj: ", e.CounterObj, " \n\t\tCounterXDPLink(UL): ", e.CounterULXDPLink, " \n\t\tCounterDLXDPLink(DL): ", e.CounterDLXDPLink)
 	logger.EbpfLog.Traceln("eBPF Probe initialized")
 	return e, nil
 }

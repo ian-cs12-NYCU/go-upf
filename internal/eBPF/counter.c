@@ -62,21 +62,21 @@ struct {
     __type(value, struct flow_stats);
 } flow_statistics SEC(".maps");
 
-// ---- 新增：每個 flow 的 16 筆最近封包 ring ----
+// ---- Added: 16 recent packet ring for each flow ----
 #define RECENT_PKT_RING_SIZE 16
 #define RECENT_PKT_RING_MASK (RECENT_PKT_RING_SIZE - 1)
 
 struct pkt_ring {
-    // TODO:移除自旋鎖，避免需要 BTF 支持
+    // TODO: Remove spin lock to avoid requiring BTF support
     // struct bpf_spin_lock lock;
-    __u32 head;                             // 逐步遞增的寫入計數
-    __u32 count;                            // 已填入的有效數 (<=16)
+    __u32 head;                             // Incrementally increasing write count
+    __u32 count;                            // Number of valid entries filled (<=16)
     struct pkt_rec recs[RECENT_PKT_RING_SIZE];
 };
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 131072);            // 與 flow_statistics 同級
+    __uint(max_entries, 131072);            // Same level as flow_statistics
     __type(key,   struct flow_key);
     __type(value, struct pkt_ring);
 } flow_recent_pkts SEC(".maps");
@@ -92,14 +92,14 @@ static int ring_push(struct flow_key *key, struct pkt_rec *rec) {
     struct pkt_ring *ring;
     struct pkt_ring new_ring = {};
     
-    // 初始化新 ring 的值
+    // Initialize new ring values
     new_ring.head = 0;
     new_ring.count = 0;
     
     // Try to look up existing ring
     ring = bpf_map_lookup_elem(&flow_recent_pkts, key);
     if (ring) {
-        // TODO:不再需要鎖操作
+        // TODO: No longer need lock operations
         // bpf_spin_lock(&ring->lock);
         
         // Calculate the position to write the new record
@@ -116,7 +116,7 @@ static int ring_push(struct flow_key *key, struct pkt_rec *rec) {
             ring->count++;
         }
         
-        // TODO: 不再需要解鎖操作
+        // TODO: No longer need unlock operations
         // bpf_spin_unlock(&ring->lock);
         
         bpf_debug("Updated packet ring: pos=%u, count=%u\n", pos, ring->count);
@@ -425,14 +425,22 @@ static __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh) {
     return XDP_PASS;
 }
 
-SEC("xdp_entry_point")
-int xdp_program_entrypoint(struct xdp_md *ctx) {
+SEC("xdp/ul")
+int ul_xdp_program_entrypoint(struct xdp_md *ctx) {
     bpf_debug("xdp_program_entrypoint called\n");
     void *data = (void*)(long)ctx->data;
     struct ethhdr *eth = data;
 
     // Start to handle the ethernet header
     return eth_handle(ctx, eth);
+
+done:
+    return XDP_PASS;
+}
+
+SEC("xdp/dl")
+int dl_xdp_program_entrypoint(struct xdp_md *ctx) {
+    bpf_debug("dl_xdp_program_entrypoint called !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 
 done:
     return XDP_PASS;

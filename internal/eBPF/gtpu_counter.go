@@ -41,40 +41,66 @@ type Flows struct {
 
 // Attach the eBPF program to the network interface (XDP).
 func (e *EbpfProbe) attachCounter() error {
-
-	ifaceName := e.XdpIfName
-	iface, err := net.InterfaceByName(ifaceName)
+	// Get the uplink interface
+	ULIfaceName := e.XdpULIfName
+	ULIface, err := net.InterfaceByName(ULIfaceName)
 	if err != nil {
-		return fmt.Errorf("lookup network iface %q: %s", ifaceName, err)
+		return fmt.Errorf("lookup network iface %q: %s", ULIfaceName, err)
 	}
-	logger.EbpfLog.Traceln("Found Interface Name: ", iface.Name, "successfully")
+	logger.EbpfLog.Traceln("Found Interface Name(UL): ", ULIface.Name, "successfully")
+
+	// Get the downlink interface
+	DLIfaceName := e.XdpDLIfName
+	DLIface, err := net.InterfaceByName(DLIfaceName)
+	if err != nil {
+		return fmt.Errorf("lookup network iface %q: %s", DLIfaceName, err)
+	}
+	logger.EbpfLog.Traceln("Found Interface Name(DL): ", DLIface.Name, "successfully")
 
 	// Load pre-compiled programs into the kernel.
-	e.CounterObj = counterObjects{}
-	if err := loadCounterObjects(&e.CounterObj, nil); err != nil {
+	e.CounterObj = ebpf_counterObjects{}
+	if err := loadEbpf_counterObjects(&e.CounterObj, nil); err != nil {
 		return fmt.Errorf("loading objects: %s", err)
 	}
 	logger.EbpfLog.Traceln("Loaded counter eBPF objects successfully")
 
-	// Attach the program.
-	e.CounterXDPLink, err = link.AttachXDP(link.XDPOptions{
-		Program:   e.CounterObj.XdpProgramEntrypoint,
-		Interface: iface.Index,
+	// Attach the UL (Uplink) program to UL interface
+	e.CounterULXDPLink, err = link.AttachXDP(link.XDPOptions{
+		Program:   e.CounterObj.UlXdpProgramEntrypoint,
+		Interface: ULIface.Index,
 	})
 	if err != nil {
-		return fmt.Errorf("attaching XDP program: %s", err)
+		return fmt.Errorf("attaching UL XDP program: %s", err)
 	}
+	logger.EbpfLog.Traceln("Attached UL XDP program to interface ", ULIface.Name, " (index ", ULIface.Index, ") Successfully")
 
-	logger.EbpfLog.Traceln("Attached XDP program to interface ", iface.Name, " (index ", iface.Index, ") Successfully")
+	// Attach the DL (Downlink) program to DL interface
+	e.CounterDLXDPLink, err = link.AttachXDP(link.XDPOptions{
+		Program:   e.CounterObj.DlXdpProgramEntrypoint,
+		Interface: DLIface.Index,
+	})
+	if err != nil {
+		// If DL attachment fails, clean up UL attachment
+		e.CounterULXDPLink.Close()
+		return fmt.Errorf("attaching DL XDP program: %s", err)
+	}
+	logger.EbpfLog.Traceln("Attached DL XDP program to interface ", DLIface.Name, " (index ", DLIface.Index, ") Successfully")
 	return nil
 }
 
 // Detach the eBPF program from the network interface (XDP).
 func (e *EbpfProbe) detachCounter() error {
-	if err := e.CounterXDPLink.Close(); err != nil {
-		return fmt.Errorf("closing XDP link: %s", err)
+	// Detach UL XDP link
+	if err := e.CounterULXDPLink.Close(); err != nil {
+		return fmt.Errorf("closing UL XDP link: %s", err)
 	}
-	logger.EbpfLog.Traceln("Counter XDP link removed")
+	logger.EbpfLog.Traceln("Counter UL XDP link removed")
+
+	// Detach DL XDP link
+	if err := e.CounterDLXDPLink.Close(); err != nil {
+		return fmt.Errorf("closing DL XDP link: %s", err)
+	}
+	logger.EbpfLog.Traceln("Counter DL XDP link removed")
 
 	e.CounterObj.Close()
 	logger.EbpfLog.Traceln("Counter objects closed")
@@ -101,7 +127,7 @@ func formatTimeStamp(ts uint64) TimeStamp {
 		Formatted:   formattedTime,
 	}
 } // GetConuterConnTuple retrieves connection tuples and statistics from the eBPF map
-func (e *EbpfProbe) GetConuterConnTuple() (conn []Flows, err error) {
+func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 	// Clone the map to safely iterate over it
 	connMap, err := e.CounterObj.FlowStatistics.Clone()
 	if err != nil {
@@ -115,9 +141,9 @@ func (e *EbpfProbe) GetConuterConnTuple() (conn []Flows, err error) {
 	}
 
 	// Define variables for key and value
-	var key counterFlowKey
-	var value counterFlowStats
-	var pktRing counterPktRing
+	var key ebpf_counterFlowKey
+	var value ebpf_counterFlowStats
+	var pktRing ebpf_counterPktRing
 
 	// Iterate through all entries in the map
 	iter := connMap.Iterate()
@@ -174,9 +200,9 @@ func (e *EbpfProbe) GetConuterConnTuple() (conn []Flows, err error) {
 			logger.EbpfLog.Traceln("No packet ring found for flow, error: ", err)
 		}
 
-		conn = append(conn, ct)
+		flows = append(flows, ct)
 	}
-	return conn, nil
+	return flows, nil
 }
 
 func uint32ToIP(ip uint32) net.IP {
