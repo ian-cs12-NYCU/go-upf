@@ -18,6 +18,13 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define MAX_MAP_ENTRIES 16
 
+// Direction constants for flow processing
+#define DIRECTION_UL 1  // Uplink - need deep parsing (GTP tunneling)
+#define DIRECTION_DL 2  // Downlink - shallow parsing (outer IP only)
+
+// Global variable to track current processing direction
+static __u8 current_direction = 0;
+
  
 struct flow_key {
     __u8  family;     // 4: IPv4, 6: IPv6
@@ -88,7 +95,7 @@ struct {
  * @param pkt_rec Packet record to be added to the ring buffer
  * @return 0 on success, negative value on error
  */
-static int ring_push(struct flow_key *key, struct pkt_rec *rec) {
+static __always_inline int ring_push(struct flow_key *key, struct pkt_rec *rec) {
     struct pkt_ring *ring;
     struct pkt_ring new_ring = {};
     
@@ -139,7 +146,6 @@ static int ring_push(struct flow_key *key, struct pkt_rec *rec) {
  * This function extracts the 5-tuple (src/dst IP, src/dst port, protocol) from the packet
  * and updates the flow statistics in the map.
  * 
- * @param ctx XDP context
  * @param iph IP header
  * @param proto Protocol (TCP/UDP)
  * @param sport Source port
@@ -147,7 +153,7 @@ static int ring_push(struct flow_key *key, struct pkt_rec *rec) {
  * @param pkt_len Packet length in bytes
  * @return 0 on success, negative value on error
  */
-static int record_flow(struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, __u32 pkt_len) {
+static __always_inline int record_flow(struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, __u32 pkt_len) {
     struct flow_key key = {};
     struct flow_stats *stats, new_stats = {};
     __u64 ts = bpf_ktime_get_ns();
@@ -190,31 +196,23 @@ static int record_flow(struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, 
                  bpf_ntohl(iph->daddr) & 0xFF, bpf_ntohs(dport));
     }
     
-    // Create a packet record for the ring buffer
+    // Create a packet record for the ring buffer using global direction
     struct pkt_rec pkt_record = {};
     pkt_record.ts_ns = ts;
     pkt_record.len = pkt_len;
     pkt_record.l4 = proto;
-    pkt_record.dir = 0;  // Can be set appropriately if direction is known
-    
-    // For TCP, optionally capture TCP flags if available
-    if (proto == IPPROTO_TCP) {
-        // This would require access to the TCP header, which we don't have here
-        // Would need to be passed in from the caller
-        pkt_record.tcp_flags = 0;
-    }
-    
-    // Capture DSCP/ECN from IP header
+    pkt_record.dir = current_direction;  // Use global direction
+    pkt_record.tcp_flags = 0;
     pkt_record.dscp_ecn = (iph->tos & 0xFF);
     
     // Push the packet record into the ring buffer for this flow
-    bpf_debug("Attempt to push packet record to ring buffer\n");
+    bpf_debug("Recording flow packet to ring buffer\n");
     ring_push(&key, &pkt_record);
     
     return 0;
 }
 
-static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
+static __always_inline __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
     void *p_data_end = (void*)(long)ctx->data_end;
     void *p_data = (void*)(long)ctx->data;
 
@@ -249,7 +247,7 @@ static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
             dst_port = bpf_ntohs(*((__u16 *)(transport_hdr + 2)));
             __u32 pkt_len = p_data_end - p_data;
             
-            // Record flow statistics (works for both UDP and TCP)
+            // Record flow statistics (works for both UDP and TCP) - inner flow is always UL
             record_flow(iph, iph->protocol, src_port, dst_port, pkt_len);
             
             // Log info about the flow (protocol type is already in the record_flow debug output)
@@ -283,7 +281,7 @@ static __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
     return XDP_PASS;
 }
 
-static __u32 gtp_handle(struct xdp_md* ctx, const void* gtpuh) {
+static __always_inline __u32 gtp_handle(struct xdp_md* ctx, const void* gtpuh) {
     void *data_end = (void*)(long)ctx->data_end;
 
     const void *inner = NULL;
@@ -308,7 +306,7 @@ static __u32 gtp_handle(struct xdp_md* ctx, const void* gtpuh) {
     return XDP_PASS;
 }
 
-static __u32 udp_handle(struct xdp_md *ctx, struct udphdr *udph) 
+static __always_inline __u32 udp_handle(struct xdp_md *ctx, struct udphdr *udph, __u8 direction) 
 {
     void *p_data_end = (void*)(long)ctx->data_end;
     
@@ -319,14 +317,13 @@ static __u32 udp_handle(struct xdp_md *ctx, struct udphdr *udph)
 
     __u32 dest_port = bpf_ntohs(udph->dest);
     
-    switch(dest_port) {
-    case GTP_UDP_PORT:
-        bpf_debug("GTP packet (dest port=%d)\n", dest_port);
+    // Only parse GTP for UL traffic
+    if (direction == DIRECTION_UL && dest_port == GTP_UDP_PORT) {
+        bpf_debug("GTP packet (dest port=%d) - UL traffic\n", dest_port);
         struct gtpuhdr *gtp_hdr = (void*)udph + sizeof(*udph);
         gtp_handle(ctx, gtp_hdr);
-        break;
-    default:
-        bpf_debug("Unknown UDP packet (dest port=%d)\n", dest_port);
+    } else {
+        bpf_debug("Non-GTP UDP packet (dest port=%d) or DL traffic\n", dest_port);
     }
 
     return XDP_PASS;
@@ -335,9 +332,10 @@ static __u32 udp_handle(struct xdp_md *ctx, struct udphdr *udph)
 /**
  * @param ctx The user accessible data for XDP packet hook.
  * @param iph The IP header.
+ * @param direction Direction (UL/DL)
  * @return u32 The XDP action.
  */
-static __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph) {
+static __always_inline __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph, __u8 direction) {
     void* p_data = (void*)(long)ctx->data;
     void *p_data_end = (void*)(long)ctx->data_end;
     
@@ -356,17 +354,27 @@ static __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph) {
     bpf_debug("IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
     bpf_debug("IPv4 dst: %u", ip_dest & 0xFF);
 
+    // For DL traffic, record outer flow and stop parsing
+    if (direction == DIRECTION_DL) {
+        __u32 pkt_len = p_data_end - p_data;
+        bpf_debug("DL traffic: recording outer flow and stopping\n");
+        // For DL outer flow, use port 0 since we don't parse L4 headers
+        record_flow(iph, iph->protocol, 0, 0, pkt_len);
+        return XDP_PASS;
+    }
+
+    // For UL traffic, continue deep parsing
     switch (iph->protocol) {
         case IPPROTO_UDP:
-            bpf_debug("UDP packet\n");
+            bpf_debug("UDP packet - UL traffic, continue parsing\n");
             struct udphdr *udp_hdr = (struct udphdr *)((void*)iph + sizeof(*iph));
-            udp_handle(ctx, udp_hdr);
+            udp_handle(ctx, udp_hdr, direction);
             break;
         case IPPROTO_TCP:
-            bpf_debug("TCP packet\n");
+            bpf_debug("TCP packet - UL traffic\n");
             break;
         default:
-            bpf_debug("Unknown IPv4 protocol\n");
+            bpf_debug("Unknown IPv4 protocol - UL traffic\n");
             return XDP_PASS;
     }
     return XDP_PASS;
@@ -379,9 +387,10 @@ struct vlan_hdr {
 /** 
  * @param ctx The user accessible data for XDP packet hook
  * @param ethh The Ethernet header.
+ * @param direction Direction (UL/DL)
  * @return XDP action
 */
-static __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh) {
+static __always_inline __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh, __u8 direction) {
     void *p_data_end = (void*)(long)ctx->data_end;
     __u32 dport;
     __u64 offset = sizeof(*ethh);
@@ -412,7 +421,7 @@ static __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh) {
     case ETH_P_IP:
         bpf_debug("IPv4 packet\n");
         struct iphdr *ip_hdr = (struct iphdr *)((void*)ethh + offset);
-        return ipv4_handle(ctx, ip_hdr);
+        return ipv4_handle(ctx, ip_hdr, direction);
         break;
     case ETH_P_IPV6:
         bpf_debug("IPv6 packet\n");
@@ -427,12 +436,16 @@ static __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh) {
 
 SEC("xdp/ul")
 int ul_xdp_program_entrypoint(struct xdp_md *ctx) {
-    bpf_debug("xdp_program_entrypoint called\n");
+    // bpf_debug("ul_xdp_program_entrypoint called - UL traffic\n");
+    
+    // Set global direction for this packet processing
+    current_direction = DIRECTION_UL;
+    
     void *data = (void*)(long)ctx->data;
     struct ethhdr *eth = data;
 
-    // Start to handle the ethernet header
-    return eth_handle(ctx, eth);
+    // Start to handle the ethernet header with UL direction
+    return eth_handle(ctx, eth, DIRECTION_UL);
 
 done:
     return XDP_PASS;
@@ -440,7 +453,16 @@ done:
 
 SEC("xdp/dl")
 int dl_xdp_program_entrypoint(struct xdp_md *ctx) {
-    bpf_debug("dl_xdp_program_entrypoint called !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    // bpf_debug("dl_xdp_program_entrypoint called - DL traffic\n");
+    
+    // Set global direction for this packet processing
+    current_direction = DIRECTION_DL;
+    
+    void *data = (void*)(long)ctx->data;
+    struct ethhdr *eth = data;
+
+    // Start to handle the ethernet header with DL direction
+    return eth_handle(ctx, eth, DIRECTION_DL);
 
 done:
     return XDP_PASS;
