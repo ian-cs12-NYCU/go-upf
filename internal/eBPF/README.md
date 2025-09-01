@@ -54,3 +54,35 @@ $sudo bpftool prog tracelog
 ```
 
 Run another terminal
+
+#### Check eBPF Program Status
+```bash
+# Check all loaded eBPF programs
+sudo bpftool prog list
+
+# Check XDP programs attached to interfaces
+sudo bpftool net list
+
+# Check TC programs on specific interfaces
+sudo tc filter show dev enp0s3 egress
+sudo tc filter show dev upfgtp egress
+
+# Check TC qdisc status
+sudo tc qdisc show dev upfgtp
+sudo tc qdisc show dev enp0s3
+```
+
+#### Monitor eBPF Program Output
+Open bpftool in one terminal
+```
+$ sudo bpftool prog tracelog
+```
+
+clean trace log
+```
+# 清空 trace buffer
+# 執行前 - 查看 trace 內容
+$ sudo cat /sys/kernel/debug/tracing/trace | wc -l
+
+$ sudo sh -c 'echo > /sys/kernel/debug/tracing/trace'
+```

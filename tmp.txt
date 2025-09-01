@@ -1,0 +1,433 @@
+          <idle>-0       [003] ..s.. 1043483.096768: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043483.096775: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043483.096776: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043483.096778: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043483.096779: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043483.096780: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043483.096783: bpf_trace_printk: Found IP in UL sources: packets=19 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043483.096784: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043483.096789: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=19, bytes=1596
+
+          <idle>-0       [003] ..s.. 1043483.096789: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043483.096792: bpf_trace_printk: UL(XDP): Updated packet ring: pos=2, count=16
+
+          <idle>-0       [003] ..s.. 1043484.187064: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043484.187066: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043484.187067: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043484.187068: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043484.187068: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043484.187069: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043484.187070: bpf_trace_printk: Found IP in UL sources: packets=20 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043484.187071: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043484.187074: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=20, bytes=1680
+
+          <idle>-0       [003] ..s.. 1043484.187075: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043484.187077: bpf_trace_printk: UL(XDP): Updated packet ring: pos=3, count=16
+
+          <idle>-0       [003] ..s.. 1043485.195159: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043485.195163: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043485.195164: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043485.195166: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043485.195166: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043485.195167: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043485.195170: bpf_trace_printk: Found IP in UL sources: packets=21 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043485.195171: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043485.195176: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=21, bytes=1764
+
+          <idle>-0       [003] ..s.. 1043485.195177: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043485.195181: bpf_trace_printk: UL(XDP): Updated packet ring: pos=4, count=16
+
+CPU:1 [LOST 75 EVENTS]
+          <idle>-0       [001] ..s.1 1043486.196055: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=22, bytes=3124
+
+          <idle>-0       [001] ..s.1 1043486.196058: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=22, bytes=3124
+
+          <idle>-0       [001] ..s.1 1043486.196058: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] ..s.1 1043486.196060: bpf_trace_printk: UL(XDP): Updated packet ring: pos=5, count=16
+
+          <idle>-0       [001] ..s.1 1043486.196061: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043486.200123: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043486.200124: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043486.200125: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043486.200125: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043486.200126: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043486.200126: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043486.200127: bpf_trace_printk: Found IP in UL sources: packets=22 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043486.200128: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043486.200130: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=22, bytes=1848
+
+          <idle>-0       [003] ..s.. 1043486.200130: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043486.200132: bpf_trace_printk: UL(XDP): Updated packet ring: pos=5, count=16
+
+          <idle>-0       [001] ..s.1 1043487.215992: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+          <idle>-0       [001] ..s.1 1043487.215995: bpf_trace_printk: UL(XDP): IPv4 packet
+
+          <idle>-0       [001] ..s.1 1043487.215997: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+          <idle>-0       [001] ..s.1 1043487.215999: bpf_trace_printk: UL(XDP): IPv4 src: 103
+          <idle>-0       [001] ..s.1 1043487.216000: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+          <idle>-0       [001] ..s.1 1043487.216001: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+          <idle>-0       [001] ..s.1 1043487.216003: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+          <idle>-0       [001] ..s.1 1043487.216005: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+          <idle>-0       [001] ..s.1 1043487.216007: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+          <idle>-0       [001] ..s.1 1043487.216009: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+          <idle>-0       [001] ..s.1 1043487.216010: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+          <idle>-0       [001] ..s.1 1043487.216012: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+          <idle>-0       [001] ..s.1 1043487.216013: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+          <idle>-0       [001] ..s.1 1043487.216015: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+          <idle>-0       [001] ..s.1 1043487.216016: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+          <idle>-0       [001] ..s.1 1043487.216021: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=23, bytes=3266
+
+          <idle>-0       [001] ..s.1 1043487.216026: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=23, bytes=3266
+
+          <idle>-0       [001] ..s.1 1043487.216027: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] ..s.1 1043487.216031: bpf_trace_printk: UL(XDP): Updated packet ring: pos=6, count=16
+
+          <idle>-0       [001] ..s.1 1043487.216033: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043487.375986: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043487.375988: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043487.375988: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043487.375989: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043487.375989: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043487.375990: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043487.375991: bpf_trace_printk: Found IP in UL sources: packets=23 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043487.375991: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043487.375993: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=23, bytes=1932
+
+          <idle>-0       [003] ..s.. 1043487.375994: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043487.375995: bpf_trace_printk: UL(XDP): Updated packet ring: pos=6, count=16
+
+          <idle>-0       [001] .Ns.1 1043488.219523: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+          <idle>-0       [001] .Ns.1 1043488.219525: bpf_trace_printk: UL(XDP): IPv4 packet
+
+          <idle>-0       [001] .Ns.1 1043488.219527: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+          <idle>-0       [001] .Ns.1 1043488.219527: bpf_trace_printk: UL(XDP): IPv4 src: 103
+          <idle>-0       [001] .Ns.1 1043488.219528: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+          <idle>-0       [001] .Ns.1 1043488.219529: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+          <idle>-0       [001] .Ns.1 1043488.219530: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+          <idle>-0       [001] .Ns.1 1043488.219531: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+          <idle>-0       [001] .Ns.1 1043488.219532: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+          <idle>-0       [001] .Ns.1 1043488.219533: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+          <idle>-0       [001] .Ns.1 1043488.219534: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+          <idle>-0       [001] .Ns.1 1043488.219535: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+          <idle>-0       [001] .Ns.1 1043488.219536: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+          <idle>-0       [001] .Ns.1 1043488.219537: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+          <idle>-0       [001] .Ns.1 1043488.219538: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+          <idle>-0       [001] .Ns.1 1043488.219541: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=24, bytes=3408
+
+          <idle>-0       [001] .Ns.1 1043488.219545: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=24, bytes=3408
+
+          <idle>-0       [001] .Ns.1 1043488.219546: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] .Ns.1 1043488.219549: bpf_trace_printk: UL(XDP): Updated packet ring: pos=7, count=16
+
+          <idle>-0       [001] .Ns.1 1043488.219550: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043488.224450: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043488.224452: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043488.224453: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043488.224455: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043488.224455: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043488.224456: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043488.224457: bpf_trace_printk: Found IP in UL sources: packets=24 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043488.224458: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043488.224462: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=24, bytes=2016
+
+          <idle>-0       [003] ..s.. 1043488.224463: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043488.224465: bpf_trace_printk: UL(XDP): Updated packet ring: pos=7, count=16
+
+          <idle>-0       [001] ..s.1 1043489.225266: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+          <idle>-0       [001] ..s.1 1043489.225268: bpf_trace_printk: UL(XDP): IPv4 packet
+
+          <idle>-0       [001] ..s.1 1043489.225271: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+          <idle>-0       [001] ..s.1 1043489.225272: bpf_trace_printk: UL(XDP): IPv4 src: 103
+          <idle>-0       [001] ..s.1 1043489.225273: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+          <idle>-0       [001] ..s.1 1043489.225274: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+          <idle>-0       [001] ..s.1 1043489.225275: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+          <idle>-0       [001] ..s.1 1043489.225277: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+          <idle>-0       [001] ..s.1 1043489.225278: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+          <idle>-0       [001] ..s.1 1043489.225280: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+          <idle>-0       [001] ..s.1 1043489.225281: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+          <idle>-0       [001] ..s.1 1043489.225282: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+          <idle>-0       [001] ..s.1 1043489.225283: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+          <idle>-0       [001] ..s.1 1043489.225285: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+          <idle>-0       [001] ..s.1 1043489.225286: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+          <idle>-0       [001] ..s.1 1043489.225290: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=25, bytes=3550
+
+          <idle>-0       [001] ..s.1 1043489.225295: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=25, bytes=3550
+
+          <idle>-0       [001] ..s.1 1043489.225296: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] ..s.1 1043489.225300: bpf_trace_printk: UL(XDP): Updated packet ring: pos=8, count=16
+
+          <idle>-0       [001] ..s.1 1043489.225301: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043489.231318: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043489.231324: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043489.231325: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043489.231328: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043489.231329: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043489.231331: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043489.231335: bpf_trace_printk: Found IP in UL sources: packets=25 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043489.231338: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043489.231345: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=25, bytes=2100
+
+          <idle>-0       [003] ..s.. 1043489.231346: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043489.231351: bpf_trace_printk: UL(XDP): Updated packet ring: pos=8, count=16
+
+          <idle>-0       [001] ..s.1 1043490.223279: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+          <idle>-0       [001] ..s.1 1043490.223280: bpf_trace_printk: UL(XDP): IPv4 packet
+
+          <idle>-0       [001] ..s.1 1043490.223280: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+          <idle>-0       [001] ..s.1 1043490.223281: bpf_trace_printk: UL(XDP): IPv4 src: 103
+          <idle>-0       [001] ..s.1 1043490.223281: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+          <idle>-0       [001] ..s.1 1043490.223281: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+          <idle>-0       [001] ..s.1 1043490.223281: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+          <idle>-0       [001] ..s.1 1043490.223282: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+          <idle>-0       [001] ..s.1 1043490.223283: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+          <idle>-0       [001] ..s.1 1043490.223283: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+          <idle>-0       [001] ..s.1 1043490.223283: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+          <idle>-0       [001] ..s.1 1043490.223284: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+          <idle>-0       [001] ..s.1 1043490.223284: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+          <idle>-0       [001] ..s.1 1043490.223284: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+          <idle>-0       [001] ..s.1 1043490.223285: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+          <idle>-0       [001] ..s.1 1043490.223286: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=26, bytes=3692
+
+          <idle>-0       [001] ..s.1 1043490.223287: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=26, bytes=3692
+
+          <idle>-0       [001] ..s.1 1043490.223288: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] ..s.1 1043490.223289: bpf_trace_printk: UL(XDP): Updated packet ring: pos=9, count=16
+
+          <idle>-0       [001] ..s.1 1043490.223290: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043490.228391: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043490.228393: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043490.228393: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043490.228394: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043490.228394: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043490.228394: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043490.228396: bpf_trace_printk: Found IP in UL sources: packets=26 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043490.228396: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043490.228399: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=26, bytes=2184
+
+          <idle>-0       [003] ..s.. 1043490.228399: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043490.228400: bpf_trace_printk: UL(XDP): Updated packet ring: pos=9, count=16
+
+          <idle>-0       [001] ..s.1 1043491.225975: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+          <idle>-0       [001] ..s.1 1043491.225976: bpf_trace_printk: UL(XDP): IPv4 packet
+
+          <idle>-0       [001] ..s.1 1043491.225977: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+          <idle>-0       [001] ..s.1 1043491.225977: bpf_trace_printk: UL(XDP): IPv4 src: 103
+          <idle>-0       [001] ..s.1 1043491.225978: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+          <idle>-0       [001] ..s.1 1043491.225978: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+          <idle>-0       [001] ..s.1 1043491.225978: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+          <idle>-0       [001] ..s.1 1043491.225979: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+          <idle>-0       [001] ..s.1 1043491.225979: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+          <idle>-0       [001] ..s.1 1043491.225980: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+          <idle>-0       [001] ..s.1 1043491.225980: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+          <idle>-0       [001] ..s.1 1043491.225980: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+          <idle>-0       [001] ..s.1 1043491.225981: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+          <idle>-0       [001] ..s.1 1043491.225981: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+          <idle>-0       [001] ..s.1 1043491.225981: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+          <idle>-0       [001] ..s.1 1043491.225983: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=27, bytes=3834
+
+          <idle>-0       [001] ..s.1 1043491.225985: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=27, bytes=3834
+
+          <idle>-0       [001] ..s.1 1043491.225985: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] ..s.1 1043491.225987: bpf_trace_printk: UL(XDP): Updated packet ring: pos=10, count=16
+
+          <idle>-0       [001] ..s.1 1043491.225987: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043491.230225: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043491.230226: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043491.230227: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043491.230227: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043491.230227: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043491.230228: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043491.230229: bpf_trace_printk: Found IP in UL sources: packets=27 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043491.230229: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043491.230231: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=27, bytes=2268
+
+          <idle>-0       [003] ..s.. 1043491.230232: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043491.230233: bpf_trace_printk: UL(XDP): Updated packet ring: pos=10, count=16
+
+          <idle>-0       [001] ..s.1 1043492.229970: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+          <idle>-0       [001] ..s.1 1043492.229972: bpf_trace_printk: UL(XDP): IPv4 packet
+
+          <idle>-0       [001] ..s.1 1043492.229973: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+          <idle>-0       [001] ..s.1 1043492.229973: bpf_trace_printk: UL(XDP): IPv4 src: 103
+          <idle>-0       [001] ..s.1 1043492.229974: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+          <idle>-0       [001] ..s.1 1043492.229974: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+          <idle>-0       [001] ..s.1 1043492.229974: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+          <idle>-0       [001] ..s.1 1043492.229975: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+          <idle>-0       [001] ..s.1 1043492.229976: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+          <idle>-0       [001] ..s.1 1043492.229976: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+          <idle>-0       [001] ..s.1 1043492.229977: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+          <idle>-0       [001] ..s.1 1043492.229977: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+          <idle>-0       [001] ..s.1 1043492.229977: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+          <idle>-0       [001] ..s.1 1043492.229978: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+          <idle>-0       [001] ..s.1 1043492.229978: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+          <idle>-0       [001] ..s.1 1043492.229980: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=28, bytes=3976
+
+          <idle>-0       [001] ..s.1 1043492.229982: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=28, bytes=3976
+
+          <idle>-0       [001] ..s.1 1043492.229983: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [001] ..s.1 1043492.229985: bpf_trace_printk: UL(XDP): Updated packet ring: pos=11, count=16
+
+          <idle>-0       [001] ..s.1 1043492.229985: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043492.236988: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043492.236990: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043492.236990: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043492.236991: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043492.236991: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043492.236991: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043492.236992: bpf_trace_printk: Found IP in UL sources: packets=28 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043492.236993: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043492.236995: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=28, bytes=2352
+
+          <idle>-0       [003] ..s.. 1043492.236995: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043492.236997: bpf_trace_printk: UL(XDP): Updated packet ring: pos=11, count=16
+
+            node-3570650 [001] ..s.1 1043493.237616: bpf_trace_printk: UL(XDP): Ethernet type: 0x800
+
+            node-3570650 [001] ..s.1 1043493.238696: bpf_trace_printk: UL(XDP): IPv4 packet
+
+            node-3570650 [001] ..s.1 1043493.238700: bpf_trace_printk: UL(XDP): IPv4 src: 192.168.56
+            node-3570650 [001] ..s.1 1043493.238701: bpf_trace_printk: UL(XDP): IPv4 src: 103
+            node-3570650 [001] ..s.1 1043493.238702: bpf_trace_printk: UL(XDP): IPv4 dst: 192.168.56
+            node-3570650 [001] ..s.1 1043493.238703: bpf_trace_printk: UL(XDP): IPv4 dst: 110
+            node-3570650 [001] ..s.1 1043493.238704: bpf_trace_printk: UL(XDP): UDP packet - UL traffic, continue parsing
+
+            node-3570650 [001] ..s.1 1043493.238706: bpf_trace_printk: UL(XDP): GTP packet (dest port=2152) - UL traffic
+
+            node-3570650 [001] ..s.1 1043493.238707: bpf_trace_printk: UL(XDP): GTP parse success, msg_len=92, TEID=2
+
+            node-3570650 [001] ..s.1 1043493.238709: bpf_trace_printk: UL(XDP): GTP flags: 0x34, msg_type: 255
+
+            node-3570650 [001] ..s.1 1043493.238710: bpf_trace_printk: UL(XDP): GTP TEID: 2
+
+            node-3570650 [001] ..s.1 1043493.238711: bpf_trace_printk: UL(XDP): inner IPv4 src: 10.60.0
+            node-3570650 [001] ..s.1 1043493.238712: bpf_trace_printk: UL(XDP): inner IPv4 src: 1
+            node-3570650 [001] ..s.1 1043493.238714: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8.8.8
+            node-3570650 [001] ..s.1 1043493.238714: bpf_trace_printk: UL(XDP): inner IPv4 dst: 8
+            node-3570650 [001] ..s.1 1043493.238719: bpf_trace_printk: UL(XDP): Updated UL source IP: packets=29, bytes=4118
+
+            node-3570650 [001] ..s.1 1043493.238724: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=29, bytes=4118
+
+            node-3570650 [001] ..s.1 1043493.238725: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+            node-3570650 [001] ..s.1 1043493.238728: bpf_trace_printk: UL(XDP): Updated packet ring: pos=12, count=16
+
+            node-3570650 [001] ..s.1 1043493.238730: bpf_trace_printk: UL(XDP): Recorded inner ICMP flow: type=8, code=0
+
+          <idle>-0       [003] ..s.. 1043493.244785: bpf_trace_printk: DL(TC): IPv4 packet detected
+
+          <idle>-0       [003] ..s.. 1043493.247165: bpf_trace_printk: DL(TC): IPv4 src: 8.8.8
+          <idle>-0       [003] ..s.. 1043493.247167: bpf_trace_printk: DL(TC): IPv4 src: 8
+          <idle>-0       [003] ..s.. 1043493.247169: bpf_trace_printk: DL(TC): IPv4 dst: 10.60.0
+          <idle>-0       [003] ..s.. 1043493.247170: bpf_trace_printk: DL(TC): IPv4 dst: 1
+          <idle>-0       [003] ..s.. 1043493.247170: bpf_trace_printk: DL(TC): checking if dest IP was UL source
+
+          <idle>-0       [003] ..s.. 1043493.247174: bpf_trace_printk: Found IP in UL sources: packets=29 !!!!!!!!!!!!!!!!!!!!
+
+          <idle>-0       [003] ..s.. 1043493.247175: bpf_trace_printk: DL(TC): dest IP found in UL sources, recording outer flow
+
+          <idle>-0       [003] ..s.. 1043493.247180: bpf_trace_printk: UL(XDP): Updated flow: proto=1, packets=29, bytes=2436
+
+          <idle>-0       [003] ..s.. 1043493.247182: bpf_trace_printk: UL(XDP): Recording flow packet to ring buffer
+
+          <idle>-0       [003] ..s.. 1043493.247185: bpf_trace_printk: UL(XDP): Updated packet ring: pos=12, count=16
+

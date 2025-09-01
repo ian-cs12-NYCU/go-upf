@@ -104,7 +104,7 @@ type ebpf_counterSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type ebpf_counterProgramSpecs struct {
-	DlXdpProgramEntrypoint *ebpf.ProgramSpec `ebpf:"dl_xdp_program_entrypoint"`
+	DlTcProgramEntrypoint  *ebpf.ProgramSpec `ebpf:"dl_tc_program_entrypoint"`
 	UlXdpProgramEntrypoint *ebpf.ProgramSpec `ebpf:"ul_xdp_program_entrypoint"`
 }
 
@@ -166,13 +166,13 @@ type ebpf_counterVariables struct {
 //
 // It can be passed to loadEbpf_counterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type ebpf_counterPrograms struct {
-	DlXdpProgramEntrypoint *ebpf.Program `ebpf:"dl_xdp_program_entrypoint"`
+	DlTcProgramEntrypoint  *ebpf.Program `ebpf:"dl_tc_program_entrypoint"`
 	UlXdpProgramEntrypoint *ebpf.Program `ebpf:"ul_xdp_program_entrypoint"`
 }
 
 func (p *ebpf_counterPrograms) Close() error {
 	return _Ebpf_counterClose(
-		p.DlXdpProgramEntrypoint,
+		p.DlTcProgramEntrypoint,
 		p.UlXdpProgramEntrypoint,
 	)
 }
