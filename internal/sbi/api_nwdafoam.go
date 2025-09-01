@@ -31,6 +31,38 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Pattern: "/packets-count",
 			APIFunc: s.UpfOamPacketsCountGet,
 		},
+		// New Flow Analytics APIs
+		{
+			Name:    "FlowStatisticsGet",
+			Method:  http.MethodGet,
+			Pattern: "/flows/statistics",
+			APIFunc: s.UpfOamFlowStatisticsGet,
+		},
+		{
+			Name:    "FlowStatisticsByKeyGet",
+			Method:  http.MethodGet,
+			Pattern: "/flows/statistics/:srcIP/:dstIP/:srcPort/:dstPort",
+			APIFunc: s.UpfOamFlowStatisticsByKeyGet,
+		},
+		{
+			Name:    "PacketRecordsGet",
+			Method:  http.MethodGet,
+			Pattern: "/flows/packet-records",
+			APIFunc: s.UpfOamPacketRecordsGet,
+		},
+		{
+			Name:    "PacketRecordsByKeyGet",
+			Method:  http.MethodGet,
+			Pattern: "/flows/packet-records/:srcIP/:dstIP/:srcPort/:dstPort",
+			APIFunc: s.UpfOamPacketRecordsByKeyGet,
+		},
+		{
+			Name:    "FlowCountGet",
+			Method:  http.MethodGet,
+			Pattern: "/flows/count",
+			APIFunc: s.UpfOamFlowCountGet,
+		},
+		// Existing Source IP APIs
 		{
 			Name:    "SourceIPsGet",
 			Method:  http.MethodGet,
@@ -81,6 +113,33 @@ func (s *Server) UpfOamNfResourceGet(c *gin.Context) {
 
 func (s *Server) UpfOamPacketsCountGet(c *gin.Context) {
 	s.processor.PacketCounterGetProcedure(c)
+}
+
+// New Flow Analytics API handlers
+
+// UpfOamFlowStatisticsGet handles GET /flow-statistics - retrieves flow statistics
+func (s *Server) UpfOamFlowStatisticsGet(c *gin.Context) {
+	s.processor.FlowStatisticsGetProcedure(c)
+}
+
+// UpfOamFlowStatisticsByKeyGet handles GET /flow-statistics/{srcIP}/{dstIP}/{srcPort}/{dstPort}
+func (s *Server) UpfOamFlowStatisticsByKeyGet(c *gin.Context) {
+	s.processor.FlowStatisticsByKeyGetProcedure(c)
+}
+
+// UpfOamPacketRecordsGet handles GET /packet-records - retrieves packet records
+func (s *Server) UpfOamPacketRecordsGet(c *gin.Context) {
+	s.processor.PacketRecordsGetProcedure(c)
+}
+
+// UpfOamPacketRecordsByKeyGet handles GET /packet-records/{srcIP}/{dstIP}/{srcPort}/{dstPort}
+func (s *Server) UpfOamPacketRecordsByKeyGet(c *gin.Context) {
+	s.processor.PacketRecordsByKeyGetProcedure(c)
+}
+
+// UpfOamFlowCountGet handles GET /flow-count - returns total flow count
+func (s *Server) UpfOamFlowCountGet(c *gin.Context) {
+	s.processor.FlowCountGetProcedure(c)
 }
 
 // UpfOamSourceIPsGet handles GET /source-ips - retrieves all UL source IPs

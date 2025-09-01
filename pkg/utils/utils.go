@@ -36,6 +36,21 @@ func IPToNetworkByteOrder(ip net.IP) uint32 {
 	return uint32(ip4[3]) | uint32(ip4[2])<<8 | uint32(ip4[1])<<16 | uint32(ip4[0])<<24
 }
 
+// IPToUint32 converts a net.IP to uint32 using little-endian byte order
+// This is used for eBPF maps that store IPs in little-endian format
+func IPToUint32(ip net.IP) uint32 {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return 0
+	}
+	return binary.LittleEndian.Uint32(ip4)
+}
+
+// Htons converts host byte order uint16 to network byte order
+func Htons(n uint16) uint16 {
+	return (n>>8)&0xff | (n&0xff)<<8
+}
+
 // Ntohs converts network byte order uint16 to host byte order
 func Ntohs(n uint16) uint16 {
 	return (n>>8)&0xff | (n&0xff)<<8

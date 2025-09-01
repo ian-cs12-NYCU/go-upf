@@ -100,81 +100,56 @@ func (e *EbpfProbe) detachCounter() error {
 	return nil
 }
 
-// GetConuterConnTuple retrieves connection tuples and statistics from the eBPF map
+// GetFlows retrieves combined flow data (statistics + packet records)
+// This is a high-level API that combines data from GetFlowStatistics and GetAllFlowPacketRecords
 func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
-	// Clone the map to safely iterate over it
-	connMap, err := e.CounterObj.FlowStatistics.Clone()
+	logger.EbpfLog.Infoln("Retrieving combined flow data (statistics + packet records)")
+
+	// Get flow statistics
+	flowStats, err := e.GetFlowStatistics()
 	if err != nil {
-		return []Flows{}, fmt.Errorf("cloning flow statistics map: %s", err)
+		return []Flows{}, fmt.Errorf("getting flow statistics: %s", err)
 	}
 
-	// Clone the packet ring map as well
-	pktRingMap, err := e.CounterObj.FlowRecentPkts.Clone()
+	// Get packet records for all flows
+	packetRecords, err := e.GetAllFlowPacketRecords()
 	if err != nil {
-		return []Flows{}, fmt.Errorf("cloning flow recent packets map: %s", err)
+		logger.EbpfLog.Warnf("Failed to get packet records: %s", err)
+		// Continue without packet records if ring buffer data is not available
+		packetRecords = []FlowPacketRecords{}
 	}
 
-	// Define variables for key and value
-	var key ebpf_counterFlowKey
-	var value ebpf_counterFlowStats
-	var pktRing ebpf_counterPktRing
+	// Create a map for quick lookup of packet records by flow key
+	recordsMap := make(map[string][]PacketRecord)
+	for _, record := range packetRecords {
+		key := fmt.Sprintf("%s:%d->%s:%d", record.SrcIP, record.SrcPort, record.DstIP, record.DstPort)
+		recordsMap[key] = record.RecentPkts
+	}
 
-	// Iterate through all entries in the map
-	iter := connMap.Iterate()
-	for iter.Next(&key, &value) {
-		logger.EbpfLog.Traceln("key: ", key, "value: ", value)
-
-		// Create a new Flows instance
-		ct := Flows{
-			SrcIP:   utils.Uint32ToIP(key.Addrs.Saddr),
-			SrcPort: utils.Ntohs(key.Sport),
-			DstIP:   utils.Uint32ToIP(key.Addrs.Daddr),
-			DstPort: utils.Ntohs(key.Dport),
-			Cnt:     int(value.Packets),                     // Use packet count
-			Bytes:   value.Bytes,                            // Total bytes
-			FirstTS: utils.FormatTimeStamp(value.FirstTsNs), // First packet timestamp
-			LastTS:  utils.FormatTimeStamp(value.LastTsNs),  // Last packet timestamp
+	// Combine statistics with packet records
+	for _, stat := range flowStats {
+		flow := Flows{
+			SrcIP:   stat.SrcIP,
+			DstIP:   stat.DstIP,
+			SrcPort: stat.SrcPort,
+			DstPort: stat.DstPort,
+			Cnt:     stat.Cnt,
+			Bytes:   stat.Bytes,
+			FirstTS: stat.FirstTS,
+			LastTS:  stat.LastTS,
 		}
 
-		// Try to get the packet ring buffer for this flow
-		err := pktRingMap.Lookup(&key, &pktRing)
-		if err == nil {
-			// Get and process packet records
-			ct.RecentPkts = make([]PacketRecord, 0, pktRing.Count)
-
-			// Add packet records from the ring buffer to Flows in sequence
-			head := pktRing.Head
-			count := pktRing.Count
-			if count > 16 {
-				count = 16 // Ensure not exceeding buffer size
-			}
-
-			// Start from the oldest packet (if ring is full, start after head)
-			startIdx := uint32(0)
-			if count == 16 {
-				startIdx = head & 0xF // Bit operation equivalent to % 16
-			}
-
-			for i := uint32(0); i < count; i++ {
-				idx := (startIdx + i) & 0xF // Bit operation equivalent to % 16
-				rec := pktRing.Recs[idx]
-
-				ct.RecentPkts = append(ct.RecentPkts, PacketRecord{
-					TS:        utils.FormatTimeStamp(rec.TsNs), // Timestamp with multiple formats
-					Length:    rec.Len,
-					Protocol:  rec.L4,
-					Direction: rec.Dir,
-					TCPFlags:  rec.TcpFlags,
-					DSCP_ECN:  rec.DscpEcn,
-				})
-			}
-
-			logger.EbpfLog.Traceln("Retrieved ", len(ct.RecentPkts), " packet records for flow")
+		// Add packet records if available
+		key := fmt.Sprintf("%s:%d->%s:%d", stat.SrcIP, stat.SrcPort, stat.DstIP, stat.DstPort)
+		if records, exists := recordsMap[key]; exists {
+			flow.RecentPkts = records
 		} else {
-			logger.EbpfLog.Traceln("No packet ring found for flow, error: ", err)
+			flow.RecentPkts = []PacketRecord{} // Empty slice if no records found
 		}
 
-		flows = append(flows, ct)
+		flows = append(flows, flow)
 	}
+
+	logger.EbpfLog.Infof("Retrieved combined data for %d flows", len(flows))
 	return flows, nil
 }
