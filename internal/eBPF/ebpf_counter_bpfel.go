@@ -112,6 +112,7 @@ type ebpf_counterProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type ebpf_counterMapSpecs struct {
+	DebugFlags     *ebpf.MapSpec `ebpf:"debug_flags"`
 	FlowRecentPkts *ebpf.MapSpec `ebpf:"flow_recent_pkts"`
 	FlowStatistics *ebpf.MapSpec `ebpf:"flow_statistics"`
 	UlSourceIps    *ebpf.MapSpec `ebpf:"ul_source_ips"`
@@ -143,6 +144,7 @@ func (o *ebpf_counterObjects) Close() error {
 //
 // It can be passed to loadEbpf_counterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type ebpf_counterMaps struct {
+	DebugFlags     *ebpf.Map `ebpf:"debug_flags"`
 	FlowRecentPkts *ebpf.Map `ebpf:"flow_recent_pkts"`
 	FlowStatistics *ebpf.Map `ebpf:"flow_statistics"`
 	UlSourceIps    *ebpf.Map `ebpf:"ul_source_ips"`
@@ -150,6 +152,7 @@ type ebpf_counterMaps struct {
 
 func (m *ebpf_counterMaps) Close() error {
 	return _Ebpf_counterClose(
+		m.DebugFlags,
 		m.FlowRecentPkts,
 		m.FlowStatistics,
 		m.UlSourceIps,

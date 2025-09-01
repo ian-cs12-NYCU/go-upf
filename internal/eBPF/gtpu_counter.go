@@ -12,6 +12,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Debug levels (bitmask) - corresponding to C defines in debug_tool.h
+const (
+	DBG_PACKET = uint32(1 << 0) // per-packet tracing
+	DBG_FLOW   = uint32(1 << 1) // per-flow events
+)
+
 // ensureClsact ensures that clsact qdisc is attached to the interface
 func ensureClsact(ifindex int) error {
 	// clsact qdisc handle typically uses ffff:
@@ -193,6 +199,43 @@ func (e *EbpfProbe) attachCounter() error {
 		return fmt.Errorf("all eBPF program attachments failed")
 	}
 
+	// Set debug flags if debug mode is enabled
+	if err := e.setDebugFlags(); err != nil {
+		logger.EbpfLog.Warnf("Failed to set debug flags: %s", err)
+		// Don't fail the entire attachment for debug flag issues
+	}
+
+	return nil
+}
+
+// setDebugFlags configures the debug flags in the eBPF program based on configuration
+func (e *EbpfProbe) setDebugFlags() error {
+	var flags uint32
+
+	// Determine debug flags based on configuration
+	if e.Config().Ebpf.DebugMode {
+		logger.EbpfLog.Infoln("Debug mode is enabled, setting debug flags to DBG_PACKET")
+		flags = DBG_PACKET //TODO: add more flags as needed DBG_PACKET, DBG_FLOW
+	} else {
+		logger.EbpfLog.Traceln("Debug mode is disabled, setting debug flags to 0")
+		flags = 0
+	}
+
+	// Key for debug_flags map (single element array map)
+	key := uint32(0)
+
+	// Access the debug_flags map
+	debugFlagsMap := e.CounterObj.DebugFlags
+	if debugFlagsMap == nil {
+		return fmt.Errorf("debug_flags map not found in eBPF program")
+	}
+
+	// Update the debug flags
+	if err := debugFlagsMap.Update(key, flags, 0); err != nil {
+		return fmt.Errorf("failed to update debug_flags map: %w", err)
+	}
+
+	logger.EbpfLog.Infof("Successfully set debug flags to: %d (0x%x)", flags, flags)
 	return nil
 }
 
