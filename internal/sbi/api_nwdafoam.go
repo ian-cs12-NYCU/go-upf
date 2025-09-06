@@ -118,6 +118,31 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Pattern: "/sampling-config/:rate",
 			APIFunc: s.UpfOamSamplingConfigUpdateByParam,
 		},
+		// K Value Management APIs
+		{
+			Name:    "GlobalDefaultKGet",
+			Method:  http.MethodGet,
+			Pattern: "/defaultK",
+			APIFunc: s.HandleGetGlobalDefaultK,
+		},
+		{
+			Name:    "GlobalDefaultKSet",
+			Method:  http.MethodPut,
+			Pattern: "/defaultK",
+			APIFunc: s.HandleSetGlobalDefaultK,
+		},
+		{
+			Name:    "FlowKGet",
+			Method:  http.MethodGet,
+			Pattern: "/flows/:srcIP/:srcPort/:dstIP/:dstPort/:protocol/k",
+			APIFunc: s.HandleGetFlowK,
+		},
+		{
+			Name:    "FlowKSet",
+			Method:  http.MethodPut,
+			Pattern: "/flows/:srcIP/:srcPort/:dstIP/:dstPort/:protocol/k",
+			APIFunc: s.HandleSetFlowK,
+		},
 	}
 }
 

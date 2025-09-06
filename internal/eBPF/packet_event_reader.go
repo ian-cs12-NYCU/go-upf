@@ -324,10 +324,159 @@ func (r *PacketEventReader) GetFlowByKey(flowKey FlowKey) *FlowState {
 	return flowCopy
 }
 
-// SetFlowK dynamically adjusts the K value for a specific flow (reserved for future expansion)
+// SetFlowK dynamically adjusts the K value for a specific flow
 func (r *PacketEventReader) SetFlowK(flowKey FlowKey, newK int) error {
-	// TODO: Implement dynamic K adjustment when needed
-	return fmt.Errorf("dynamic K adjustment not implemented yet")
+	if newK <= 0 {
+		return fmt.Errorf("K value must be positive, got: %d", newK)
+	}
+
+	keyStr := flowKey.String()
+
+	r.mu.RLock()
+	flow, exists := r.flows[keyStr]
+	r.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("flow not found: %s", keyStr)
+	}
+
+	flow.mu.Lock()
+	defer flow.mu.Unlock()
+
+	oldK := flow.K
+	if oldK == newK {
+		logger.EbpfLog.Debugf("Flow %s already has K=%d, no change needed", keyStr, newK)
+		return nil
+	}
+
+	// Resize the ring buffer
+	if err := r.resizeFlowBuffer(flow, newK); err != nil {
+		return fmt.Errorf("failed to resize flow buffer: %w", err)
+	}
+
+	logger.EbpfLog.Infof("Successfully resized flow %s from K=%d to K=%d", keyStr, oldK, newK)
+	return nil
+}
+
+// resizeFlowBuffer resizes the ring buffer of a flow to the new K value
+func (r *PacketEventReader) resizeFlowBuffer(flow *FlowState, newK int) error {
+	oldBuffer := flow.RecentPkts
+	oldK := flow.K
+	oldHead := flow.ringHead
+
+	// Create new buffer
+	newBuffer := make([]PacketInfo, newK)
+
+	if newK >= oldK {
+		// Expanding buffer - preserve all existing data
+		copy(newBuffer, oldBuffer)
+		flow.RecentPkts = newBuffer
+		flow.K = newK
+		// ringHead remains the same
+	} else {
+		// Shrinking buffer - preserve the most recent newK packets
+		// Calculate how many valid packets we currently have
+		validPackets := oldK
+		if flow.Cnt < uint64(oldK) {
+			validPackets = int(flow.Cnt)
+		}
+
+		if validPackets == 0 {
+			// No packets to preserve
+			flow.RecentPkts = newBuffer
+			flow.K = newK
+			flow.ringHead = 0
+		} else {
+			// Copy the most recent packets
+			packetsToCopy := newK
+			if validPackets < newK {
+				packetsToCopy = validPackets
+			}
+
+			// Copy from the most recent packets backwards
+			for i := 0; i < packetsToCopy; i++ {
+				srcIdx := (oldHead - packetsToCopy + i + oldK) % oldK
+				newBuffer[i] = oldBuffer[srcIdx]
+			}
+
+			flow.RecentPkts = newBuffer
+			flow.K = newK
+			flow.ringHead = packetsToCopy % newK
+		}
+	}
+
+	logger.EbpfLog.Debugf("Resized flow buffer from K=%d to K=%d, ringHead updated to %d", 
+		oldK, newK, flow.ringHead)
+	return nil
+}
+
+// SetGlobalDefaultK dynamically adjusts the global default K value and optionally updates all existing flows
+func (r *PacketEventReader) SetGlobalDefaultK(newDefaultK int, updateExistingFlows bool) error {
+	if newDefaultK <= 0 {
+		return fmt.Errorf("defaultK must be positive, got: %d", newDefaultK)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	oldDefaultK := r.defaultK
+	r.defaultK = newDefaultK
+
+	if !updateExistingFlows {
+		logger.EbpfLog.Infof("Global defaultK updated from %d to %d (existing flows not affected)", 
+			oldDefaultK, newDefaultK)
+		return nil
+	}
+
+	// Update all existing flows
+	successCount := 0
+	failureCount := 0
+	totalFlows := len(r.flows)
+
+	for key, flow := range r.flows {
+		flow.mu.Lock()
+		if err := r.resizeFlowBuffer(flow, newDefaultK); err != nil {
+			logger.EbpfLog.Warnf("Failed to resize flow %s: %v", key, err)
+			failureCount++
+		} else {
+			successCount++
+		}
+		flow.mu.Unlock()
+	}
+
+	logger.EbpfLog.Infof("Global defaultK updated from %d to %d. Total flows: %d, Success: %d, Failures: %d", 
+		oldDefaultK, newDefaultK, totalFlows, successCount, failureCount)
+
+	if failureCount > 0 {
+		return fmt.Errorf("updated defaultK but %d out of %d flows failed to resize", failureCount, totalFlows)
+	}
+
+	return nil
+}
+
+// GetGlobalDefaultK returns the current global default K value
+func (r *PacketEventReader) GetGlobalDefaultK() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.defaultK
+}
+
+// GetFlowK returns the K value for a specific flow
+func (r *PacketEventReader) GetFlowK(flowKey FlowKey) (int, error) {
+	keyStr := flowKey.String()
+
+	r.mu.RLock()
+	flow, exists := r.flows[keyStr]
+	r.mu.RUnlock()
+
+	if !exists {
+		return 0, fmt.Errorf("flow not found: %s", keyStr)
+	}
+
+	flow.mu.RLock()
+	defer flow.mu.RUnlock()
+
+	return flow.K, nil
 }
 
 // GetFlowCount returns the number of tracked flows

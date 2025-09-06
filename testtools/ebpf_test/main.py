@@ -400,6 +400,387 @@ def test_sampling_config_error_cases():
     except Exception as e:
         print(f"❌ Error: {e}")
 
+def test_k_config_get():
+    """Test GET /nwdaf-oam/defaultK - Get current global default K"""
+    url = f"{BASE_URL}/defaultK"
+    try:
+        response = requests.get(url, timeout=10)
+        print_response(response, "Global Default K (Get)")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def test_k_config_update_global():
+    """Test PUT /nwdaf-oam/defaultK - Update global default K"""
+    default_k = input("\n📝 Enter new global default K value (e.g., 32): ").strip()
+    
+    try:
+        default_k = int(default_k)
+    except ValueError:
+        print("❌ Invalid K value! Must be a number.")
+        return
+    
+    if default_k <= 0:
+        print("❌ K value must be greater than 0!")
+        return
+    
+    # Ask if user wants to update existing flows
+    update_existing = input("📝 Update existing flows? (y/N): ").strip().lower() == 'y'
+    
+    url = f"{BASE_URL}/defaultK"
+    data = {
+        "defaultK": default_k,
+        "updateExistingFlows": update_existing
+    }
+    
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, f"Global Default K Update - K: {default_k}, Update Existing: {update_existing}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def test_k_config_update_specific_flow():
+    """Test PUT /nwdaf-oam/flows/{srcIP}/{srcPort}/{dstIP}/{dstPort}/{protocol}/k - Update K for specific flow"""
+    print("\n📝 Enter flow parameters for specific K update:")
+    src_ip = input("Source IP (e.g., 192.168.1.1): ").strip()
+    src_port = input("Source Port (e.g., 80): ").strip()
+    dst_ip = input("Destination IP (e.g., 192.168.1.100): ").strip()
+    dst_port = input("Destination Port (e.g., 8080): ").strip()
+    protocol = input("Protocol (e.g., 6 for TCP, 17 for UDP): ").strip()
+    k_value = input("New K value (e.g., 64): ").strip()
+    
+    if not all([src_ip, src_port, dst_ip, dst_port, protocol, k_value]):
+        print("❌ All parameters are required!")
+        return
+    
+    try:
+        src_port = int(src_port)
+        dst_port = int(dst_port)
+        protocol = int(protocol)
+        k_value = int(k_value)
+    except ValueError:
+        print("❌ Invalid numeric values!")
+        return
+    
+    if k_value <= 0:
+        print("❌ K value must be greater than 0!")
+        return
+    
+    url = f"{BASE_URL}/flows/{src_ip}/{src_port}/{dst_ip}/{dst_port}/{protocol}/k"
+    data = {"k": k_value}
+    
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, f"Specific Flow K Update ({src_ip}:{src_port} -> {dst_ip}:{dst_port}, Protocol: {protocol}, K: {k_value})")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def test_k_config_get_specific_flow():
+    """Test GET /nwdaf-oam/flows/{srcIP}/{srcPort}/{dstIP}/{dstPort}/{protocol}/k - Get K for specific flow"""
+    print("\n📝 Enter flow parameters to get specific K value:")
+    src_ip = input("Source IP (e.g., 192.168.1.1): ").strip()
+    src_port = input("Source Port (e.g., 80): ").strip()
+    dst_ip = input("Destination IP (e.g., 192.168.1.100): ").strip()
+    dst_port = input("Destination Port (e.g., 8080): ").strip()
+    protocol = input("Protocol (e.g., 6 for TCP, 17 for UDP): ").strip()
+    
+    if not all([src_ip, src_port, dst_ip, dst_port, protocol]):
+        print("❌ All parameters are required!")
+        return
+    
+    try:
+        src_port = int(src_port)
+        dst_port = int(dst_port)
+        protocol = int(protocol)
+    except ValueError:
+        print("❌ Invalid numeric values!")
+        return
+    
+    url = f"{BASE_URL}/flows/{src_ip}/{src_port}/{dst_ip}/{dst_port}/{protocol}/k"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        print_response(response, f"Specific Flow K Value ({src_ip}:{src_port} -> {dst_ip}:{dst_port}, Protocol: {protocol})")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def test_k_config_workflow():
+    """Test complete K configuration workflow"""
+    print_banner("K Configuration Workflow Test")
+    
+    # Step 1: Get current configuration
+    print("\n🔍 Step 1: Getting current global default K...")
+    url = f"{BASE_URL}/defaultK"
+    try:
+        response = requests.get(url, timeout=10)
+        print_response(response, "Current Global Default K")
+        
+        if response.status_code == 200:
+            current_config = response.json()
+            current_k = current_config.get('defaultK', 16)
+            print(f"📊 Current default K: {current_k}")
+        else:
+            print("❌ Failed to get current configuration")
+            return
+    except Exception as e:
+        print(f"❌ Error getting current config: {e}")
+        return
+    
+    # Step 2: Update global default K
+    new_k = current_k * 2 if current_k < 32 else 8
+    print(f"\n🔄 Step 2: Updating global default K to {new_k} (without updating existing flows)...")
+    data = {
+        "defaultK": new_k,
+        "updateExistingFlows": False
+    }
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, f"Update Global Default K - K: {new_k}")
+    except Exception as e:
+        print(f"❌ Error updating global K: {e}")
+        return
+    
+    time.sleep(1)
+    
+    # Step 3: Verify the update
+    print(f"\n✅ Step 3: Verifying global K update...")
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            updated_config = response.json()
+            updated_k = updated_config.get('defaultK', 0)
+            if updated_k == new_k:
+                print(f"✅ Verification successful! Default K is now: {updated_k}")
+            else:
+                print(f"❌ Verification failed! Expected: {new_k}, Got: {updated_k}")
+        else:
+            print("❌ Failed to verify update")
+    except Exception as e:
+        print(f"❌ Error verifying update: {e}")
+    
+    # Step 4: Test updating with existing flows
+    new_k_2 = new_k // 2 if new_k > 1 else 24
+    print(f"\n🔄 Step 4: Updating global default K to {new_k_2} (with updating existing flows)...")
+    data = {
+        "defaultK": new_k_2,
+        "updateExistingFlows": True
+    }
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, f"Update Global Default K with Existing Flows - K: {new_k_2}")
+    except Exception as e:
+        print(f"❌ Error updating global K with existing flows: {e}")
+        return
+    
+    time.sleep(1)
+    
+    # Step 5: Final verification
+    print(f"\n✅ Step 5: Final verification...")
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            final_config = response.json()
+            final_k = final_config.get('defaultK', 0)
+            if final_k == new_k_2:
+                print(f"✅ Final verification successful! Default K is now: {final_k}")
+            else:
+                print(f"❌ Final verification failed! Expected: {new_k_2}, Got: {final_k}")
+        else:
+            print("❌ Failed to perform final verification")
+    except Exception as e:
+        print(f"❌ Error in final verification: {e}")
+    
+    print("🎉 K configuration workflow test completed!")
+
+def test_k_config_error_cases():
+    """Test K configuration error cases"""
+    print_banner("K Configuration Error Cases Test")
+    
+    # Test 1: Invalid K value (0)
+    print("\n🧪 Test 1: Invalid global K value (0)")
+    url = f"{BASE_URL}/defaultK"
+    data = {"defaultK": 0, "updateExistingFlows": False}
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, "Invalid Global K Value (0)")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    time.sleep(1)
+    
+    # Test 2: Invalid K value (negative)
+    print("\n🧪 Test 2: Invalid global K value (-5)")
+    data = {"defaultK": -5, "updateExistingFlows": False}
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, "Invalid Global K Value (-5)")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    time.sleep(1)
+    
+    # Test 3: Very large K value
+    print("\n🧪 Test 3: Very large K value (10000)")
+    data = {"defaultK": 10000, "updateExistingFlows": False}
+    try:
+        response = requests.put(url, json=data, timeout=10)
+        print_response(response, "Very Large K Value (10000)")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    time.sleep(1)
+    
+    # Test 4: Invalid flow data for specific flow K update
+    print("\n🧪 Test 4: Invalid IP address for specific flow K update")
+    url_flow = f"{BASE_URL}/flows/invalid-ip/80/192.168.1.100/8080/6/k"
+    data = {"k": 32}
+    try:
+        response = requests.put(url_flow, json=data, timeout=10)
+        print_response(response, "Invalid IP Address in Flow Path")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    time.sleep(1)
+    
+    # Test 5: Invalid port for specific flow K update
+    print("\n🧪 Test 5: Invalid port for specific flow K update")
+    url_flow = f"{BASE_URL}/flows/192.168.1.1/invalid-port/192.168.1.100/8080/6/k"
+    data = {"k": 32}
+    try:
+        response = requests.put(url_flow, json=data, timeout=10)
+        print_response(response, "Invalid Port in Flow Path")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    time.sleep(1)
+    
+    # Test 6: Missing JSON body for flow K update
+    print("\n🧪 Test 6: Missing JSON body for flow K update")
+    url_flow = f"{BASE_URL}/flows/192.168.1.1/80/192.168.1.100/8080/6/k"
+    try:
+        response = requests.put(url_flow, timeout=10)  # No JSON data
+        print_response(response, "Missing JSON Body")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def test_k_config_performance():
+    """Test K configuration performance with multiple flows"""
+    print_banner("K Configuration Performance Test")
+    
+    # First get some flows to test with
+    print("\n🔍 Step 1: Getting current flows...")
+    flows_url = f"{BASE_URL}/flows/statistics"
+    try:
+        response = requests.get(flows_url, timeout=10)
+        if response.status_code == 200:
+            flows_data = response.json()
+            flows = flows_data.get('flows', [])
+            print(f"📊 Found {len(flows)} flows for testing")
+            
+            if len(flows) == 0:
+                print("⚠️  No flows available for performance testing")
+                return
+        else:
+            print("❌ Failed to get flows for testing")
+            return
+    except Exception as e:
+        print(f"❌ Error getting flows: {e}")
+        return
+    
+    # Test updating K for multiple flows
+    print(f"\n🔄 Step 2: Testing K updates for up to 5 flows...")
+    test_flows = flows[:5]  # Test with up to 5 flows
+    
+    url = f"{BASE_URL}/k-config/flow"
+    success_count = 0
+    failure_count = 0
+    
+    start_time = time.time()
+    
+    for i, flow in enumerate(test_flows):
+        new_k = 64 + (i * 16)  # Different K values: 64, 80, 96, etc.
+        
+        data = {
+            "flow_key": {
+                "family": 4,
+                "l4": 6,  # Assume TCP
+                "src_ip": str(flow.get('srcIP', '127.0.0.1')),
+                "dst_ip": str(flow.get('dstIP', '127.0.0.1')),
+                "src_port": int(flow.get('srcPort', 80)),
+                "dst_port": int(flow.get('dstPort', 8080))
+            },
+            "k": new_k
+        }
+        
+        try:
+            response = requests.put(url, json=data, timeout=10)
+            if response.status_code == 200:
+                success_count += 1
+                print(f"✅ Flow {i+1}: K updated to {new_k}")
+            else:
+                failure_count += 1
+                print(f"❌ Flow {i+1}: Failed to update K to {new_k}")
+        except Exception as e:
+            failure_count += 1
+            print(f"❌ Flow {i+1}: Error - {e}")
+        
+        time.sleep(0.1)  # Small delay between requests
+    
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    print(f"\n📊 Performance Test Results:")
+    print(f"   Total flows tested: {len(test_flows)}")
+    print(f"   Successful updates: {success_count}")
+    print(f"   Failed updates: {failure_count}")
+    print(f"   Total time: {total_time:.3f} seconds")
+    print(f"   Average time per update: {total_time/len(test_flows):.3f} seconds")
+
+def continuous_k_monitoring():
+    """Continuous monitoring of K configuration"""
+    print_banner("Continuous K Configuration Monitoring")
+    
+    interval = input("Monitoring interval in seconds (default: 3): ").strip()
+    try:
+        interval = int(interval) if interval else 3
+    except ValueError:
+        interval = 3
+    
+    url = f"{BASE_URL}/defaultK"
+    print(f"\n🔄 Starting continuous monitoring of K Configuration")
+    print(f"📊 Interval: {interval} seconds")
+    print("Press Ctrl+C to stop\n")
+    
+    try:
+        iteration = 1
+        last_k = None
+        while True:
+            print(f"\n--- Iteration {iteration} ({time.strftime('%Y-%m-%d %H:%M:%S')}) ---")
+            try:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    config = response.json()
+                    current_k = config.get('defaultK', 'Unknown')
+                    enabled = config.get('enabled', False)
+                    
+                    if current_k != last_k:
+                        print(f"🔄 Default K changed: {last_k} → {current_k}")
+                        last_k = current_k
+                    
+                    print(f"📊 Current default K: {current_k}")
+                    print(f"🔋 eBPF enabled: {enabled}")
+                    print(f"⏱️  Response time: {response.elapsed.total_seconds():.3f}s")
+                    print("✅ Status: OK")
+                else:
+                    print(f"❌ Error: HTTP {response.status_code}")
+                    print(f"📄 Response: {response.text}")
+            except Exception as e:
+                print(f"❌ Error: {e}")
+            
+            iteration += 1
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\n\n🛑 Monitoring stopped by user")
+
 def continuous_sampling_monitoring():
     """Continuous monitoring of sampling configuration"""
     print_banner("Continuous Sampling Configuration Monitoring")
@@ -456,8 +837,9 @@ def continuous_monitoring():
     print("4. Source IPs Count")
     print("5. Source IPs Stats")
     print("6. Sampling Configuration")
+    print("7. K Configuration")
     
-    choice = input("\nSelect API to monitor (1-6): ").strip()
+    choice = input("\nSelect API to monitor (1-7): ").strip()
     interval = input("Monitoring interval in seconds (default: 5): ").strip()
     
     try:
@@ -471,7 +853,8 @@ def continuous_monitoring():
         '3': (f"{BASE_URL}/packets-count", "Packets Count"),
         '4': (f"{BASE_URL}/source-ips/count", "Source IPs Count"),
         '5': (f"{BASE_URL}/source-ips/stats", "Source IPs Stats"),
-        '6': (f"{BASE_URL}/sampling-config", "Sampling Configuration")
+        '6': (f"{BASE_URL}/sampling-config", "Sampling Configuration"),
+        '7': (f"{BASE_URL}/defaultK", "K Configuration")
     }
     
     if choice not in api_map:
@@ -480,6 +863,9 @@ def continuous_monitoring():
     
     if choice == '6':
         continuous_sampling_monitoring()
+        return
+    elif choice == '7':
+        continuous_k_monitoring()
         return
     
     url, name = api_map[choice]
@@ -558,9 +944,17 @@ def show_menu():
     print("  18. Sampling Configuration Workflow Test")
     print("  19. Sampling Configuration Error Cases")
     
-    print("\n🛠️  Utilities:")
-    print("  20. Continuous Monitoring")
-    print("  21. Run All Tests")
+    print("\n� K Configuration APIs:")
+    print("  20. Get K Configuration")
+    print("  21. Update Global Default K")
+    print("  22. Update Specific Flow K")
+    print("  23. K Configuration Workflow Test")
+    print("  24. K Configuration Error Cases")
+    print("  25. K Configuration Performance Test")
+    
+    print("\n�🛠️  Utilities:")
+    print("  26. Continuous Monitoring")
+    print("  27. Run All Tests")
     print("  0.  Exit")
     
     print("\n" + "="*60)
@@ -569,7 +963,7 @@ def main():
     """Main function"""
     while True:
         show_menu()
-        choice = input("\n🎯 Select an option (0-21): ").strip()
+        choice = input("\n🎯 Select an option (0-27): ").strip()
         
         if choice == '0':
             print("\n👋 Goodbye!")
@@ -630,11 +1024,29 @@ def main():
         elif choice == '19':
             test_sampling_config_error_cases()
         elif choice == '20':
-            continuous_monitoring()
+            print_banner("Get Global Default K")
+            test_k_config_get()
         elif choice == '21':
+            print_banner("Update Global Default K")
+            test_k_config_update_global()
+        elif choice == '22':
+            print_banner("Get Specific Flow K")
+            test_k_config_get_specific_flow()
+        elif choice == '23':
+            print_banner("Update Specific Flow K")
+            test_k_config_update_specific_flow()
+        elif choice == '24':
+            test_k_config_workflow()
+        elif choice == '25':
+            test_k_config_error_cases()
+        elif choice == '26':
+            test_k_config_performance()
+        elif choice == '27':
+            continuous_monitoring()
+        elif choice == '28':
             run_all_tests()
         else:
-            print("❌ Invalid choice! Please select 0-21.")
+            print("❌ Invalid choice! Please select 0-27.")
         
         input("\n📱 Press Enter to continue...")
 

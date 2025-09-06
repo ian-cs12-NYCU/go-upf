@@ -468,3 +468,57 @@ func (e *EbpfProbe) GetFlowCount() (int, error) {
 	logger.EbpfLog.Infof("Total flows being tracked: %d", count)
 	return count, nil
 }
+
+// SetGlobalDefaultK dynamically adjusts the global default K value for packet ring buffers
+func (e *EbpfProbe) SetGlobalDefaultK(newDefaultK int, updateExistingFlows bool) error {
+	if e.PacketEventReader == nil {
+		return fmt.Errorf("PacketEventReader not available")
+	}
+
+	return e.PacketEventReader.SetGlobalDefaultK(newDefaultK, updateExistingFlows)
+}
+
+// GetGlobalDefaultK returns the current global default K value
+func (e *EbpfProbe) GetGlobalDefaultK() (int, error) {
+	if e.PacketEventReader == nil {
+		return 0, fmt.Errorf("PacketEventReader not available")
+	}
+
+	return e.PacketEventReader.GetGlobalDefaultK(), nil
+}
+
+// SetFlowK dynamically adjusts the K value for a specific flow
+func (e *EbpfProbe) SetFlowK(srcIP net.IP, dstIP net.IP, srcPort, dstPort uint16, protocol uint8, newK int) error {
+	if e.PacketEventReader == nil {
+		return fmt.Errorf("PacketEventReader not available")
+	}
+
+	flowKey := FlowKey{
+		Family:  4, // Assume IPv4 for now
+		L4:      protocol,
+		SrcIP:   srcIP,
+		DstIP:   dstIP,
+		SrcPort: srcPort,
+		DstPort: dstPort,
+	}
+
+	return e.PacketEventReader.SetFlowK(flowKey, newK)
+}
+
+// GetFlowK returns the K value for a specific flow
+func (e *EbpfProbe) GetFlowK(srcIP net.IP, dstIP net.IP, srcPort, dstPort uint16, protocol uint8) (int, error) {
+	if e.PacketEventReader == nil {
+		return 0, fmt.Errorf("PacketEventReader not available")
+	}
+
+	flowKey := FlowKey{
+		Family:  4, // Assume IPv4 for now
+		L4:      protocol,
+		SrcIP:   srcIP,
+		DstIP:   dstIP,
+		SrcPort: srcPort,
+		DstPort: dstPort,
+	}
+
+	return e.PacketEventReader.GetFlowK(flowKey)
+}
