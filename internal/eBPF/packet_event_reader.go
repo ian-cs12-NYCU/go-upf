@@ -75,39 +75,42 @@ type FlowState struct {
 
 // PacketEventReader manages reading events from packet_events perf buffer
 type PacketEventReader struct {
-	probe      *EbpfProbe
-	perfReader *perf.Reader
-	flows      map[string]*FlowState // Map of flow states
-	maxFlows   int                   // Maximum number of flows to track
-	defaultK   int                   // Default K value for ring buffer
-	ctx        context.Context
-	cancel     context.CancelFunc
-	mu         sync.RWMutex
-	wg         sync.WaitGroup
+	probe          *EbpfProbe
+	perfReader     *perf.Reader
+	flows          map[string]*FlowState // Map of flow states
+	maxFlows       int                   // Maximum number of flows to track
+	defaultK       int                   // Default K value for ring buffer
+	perfBufferSize int                   // Perf buffer size per CPU in bytes
+	ctx            context.Context
+	cancel         context.CancelFunc
+	mu             sync.RWMutex
+	wg             sync.WaitGroup
 }
 
 // NewPacketEventReader creates a new packet event reader
-func NewPacketEventReader(probe *EbpfProbe, maxFlows, defaultK int) (*PacketEventReader, error) {
+func NewPacketEventReader(probe *EbpfProbe, maxFlows, defaultK, perfBufferSize int) (*PacketEventReader, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	reader := &PacketEventReader{
-		probe:    probe,
-		flows:    make(map[string]*FlowState),
-		maxFlows: maxFlows,
-		defaultK: defaultK,
-		ctx:      ctx,
-		cancel:   cancel,
+		probe:          probe,
+		flows:          make(map[string]*FlowState),
+		maxFlows:       maxFlows,
+		defaultK:       defaultK,
+		perfBufferSize: perfBufferSize,
+		ctx:            ctx,
+		cancel:         cancel,
 	}
 
-	// Initialize perf reader
-	perfReader, err := perf.NewReader(probe.CounterObj.PacketEvents, 4096) // 4KB buffer per CPU
+	// Initialize perf reader with configurable buffer size
+	perfReader, err := perf.NewReader(probe.CounterObj.PacketEvents, perfBufferSize)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create perf reader: %w", err)
 	}
 	reader.perfReader = perfReader
 
-	logger.EbpfLog.Infof("PacketEventReader initialized with maxFlows=%d, defaultK=%d", maxFlows, defaultK)
+	logger.EbpfLog.Infof("PacketEventReader initialized with maxFlows=%d, defaultK=%d, perfBufferSize=%d bytes",
+		maxFlows, defaultK, perfBufferSize)
 	return reader, nil
 }
 
@@ -405,7 +408,7 @@ func (r *PacketEventReader) resizeFlowBuffer(flow *FlowState, newK int) error {
 		}
 	}
 
-	logger.EbpfLog.Debugf("Resized flow buffer from K=%d to K=%d, ringHead updated to %d", 
+	logger.EbpfLog.Debugf("Resized flow buffer from K=%d to K=%d, ringHead updated to %d",
 		oldK, newK, flow.ringHead)
 	return nil
 }
@@ -423,7 +426,7 @@ func (r *PacketEventReader) SetGlobalDefaultK(newDefaultK int, updateExistingFlo
 	r.defaultK = newDefaultK
 
 	if !updateExistingFlows {
-		logger.EbpfLog.Infof("Global defaultK updated from %d to %d (existing flows not affected)", 
+		logger.EbpfLog.Infof("Global defaultK updated from %d to %d (existing flows not affected)",
 			oldDefaultK, newDefaultK)
 		return nil
 	}
@@ -444,7 +447,7 @@ func (r *PacketEventReader) SetGlobalDefaultK(newDefaultK int, updateExistingFlo
 		flow.mu.Unlock()
 	}
 
-	logger.EbpfLog.Infof("Global defaultK updated from %d to %d. Total flows: %d, Success: %d, Failures: %d", 
+	logger.EbpfLog.Infof("Global defaultK updated from %d to %d. Total flows: %d, Success: %d, Failures: %d",
 		oldDefaultK, newDefaultK, totalFlows, successCount, failureCount)
 
 	if failureCount > 0 {
@@ -484,6 +487,21 @@ func (r *PacketEventReader) GetFlowCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.flows)
+}
+
+// GetPerfBufferSize returns the current perf buffer size per CPU
+func (r *PacketEventReader) GetPerfBufferSize() int {
+	return r.perfBufferSize
+}
+
+// GetDefaultK returns the current default K value
+func (r *PacketEventReader) GetDefaultK() int {
+	return r.defaultK
+}
+
+// GetMaxFlows returns the maximum number of flows that can be tracked
+func (r *PacketEventReader) GetMaxFlows() int {
+	return r.maxFlows
 }
 
 // SamplingConfig represents the sampling configuration structure

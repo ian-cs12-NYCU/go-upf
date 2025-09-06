@@ -132,6 +132,12 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			APIFunc: s.HandleSetGlobalDefaultK,
 		},
 		{
+			Name:    "PerfBufferConfigGet",
+			Method:  http.MethodGet,
+			Pattern: "/perf-buffer-config",
+			APIFunc: s.HandleGetPerfBufferConfig,
+		},
+		{
 			Name:    "FlowKGet",
 			Method:  http.MethodGet,
 			Pattern: "/flows/:srcIP/:srcPort/:dstIP/:dstPort/:protocol/k",

@@ -63,8 +63,9 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 	}
 
 	// Initialize packet event reader with configurable parameters
-	maxFlows := 100000 // Default maximum 100K flows
-	defaultK := 16     // Default 16 recent packets per flow
+	maxFlows := 100000     // Default maximum 100K flows
+	defaultK := 16         // Default 16 recent packets per flow
+	perfBufferSize := 4096 // Default 4KB buffer per CPU
 
 	// Override with config values if provided
 	if upf.Config().Ebpf.Max_Flows > 0 {
@@ -81,7 +82,14 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 		logger.EbpfLog.Infof("Using default default_k: %d", defaultK)
 	}
 
-	eventReader, err := NewPacketEventReader(e, maxFlows, defaultK)
+	if upf.Config().Ebpf.Perf_Buffer_Size > 0 {
+		perfBufferSize = upf.Config().Ebpf.Perf_Buffer_Size
+		logger.EbpfLog.Infof("Using configured perf_buffer_size: %d bytes", perfBufferSize)
+	} else {
+		logger.EbpfLog.Infof("Using default perf_buffer_size: %d bytes", perfBufferSize)
+	}
+
+	eventReader, err := NewPacketEventReader(e, maxFlows, defaultK, perfBufferSize)
 	if err != nil {
 		logger.EbpfLog.Errorf("Failed to create packet event reader: %v", err)
 		e.detachCounter()

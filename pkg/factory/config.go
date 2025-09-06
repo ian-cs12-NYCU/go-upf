@@ -82,6 +82,7 @@ type EbpfConfig struct {
 	Max_Flows        int    `yaml:"max_flows" valid:"optional"`
 	Default_K        int    `yaml:"default_k" valid:"optional"`
 	Sample_Rate      int    `yaml:"sample_rate" valid:"optional"`
+	Perf_Buffer_Size int    `yaml:"perf_buffer_size" valid:"optional"` // Perf buffer size per CPU in bytes
 }
 
 type Logger struct {

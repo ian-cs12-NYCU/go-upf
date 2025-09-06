@@ -400,6 +400,34 @@ def test_sampling_config_error_cases():
     except Exception as e:
         print(f"❌ Error: {e}")
 
+def test_perf_buffer_config():
+    """Test GET /nwdaf-oam/perf-buffer-config - Get perf buffer configuration"""
+    url = f"{BASE_URL}/perf-buffer-config"
+    try:
+        response = requests.get(url, timeout=10)
+        print_response(response, "Perf Buffer Configuration")
+        
+        if response.status_code == 200:
+            data = response.json()
+            perf_buffer_size = data.get('perfBufferSize', 'Unknown')
+            default_k = data.get('defaultK', 'Unknown')
+            max_flows = data.get('maxFlows', 'Unknown')
+            current_flows = data.get('currentFlows', 'Unknown')
+            enabled = data.get('enabled', False)
+            
+            print(f"\n📊 Perf Buffer Configuration Summary:")
+            print(f"   Perf Buffer Size: {perf_buffer_size} bytes per CPU")
+            print(f"   Default K: {default_k}")
+            print(f"   Max Flows: {max_flows}")
+            print(f"   Current Flows: {current_flows}")
+            print(f"   Enabled: {enabled}")
+            
+            return data
+        return None
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return None
+
 def test_k_config_get():
     """Test GET /nwdaf-oam/defaultK - Get current global default K"""
     url = f"{BASE_URL}/defaultK"
@@ -947,23 +975,25 @@ def show_menu():
     print("\n� K Configuration APIs:")
     print("  20. Get K Configuration")
     print("  21. Update Global Default K")
-    print("  22. Update Specific Flow K")
-    print("  23. K Configuration Workflow Test")
-    print("  24. K Configuration Error Cases")
-    print("  25. K Configuration Performance Test")
+    print("  22. Get Specific Flow K")
+    print("  23. Update Specific Flow K")
+    print("  24. K Configuration Workflow Test")
+    print("  25. K Configuration Error Cases")
+    print("  26. K Configuration Performance Test")
     
-    print("\n�🛠️  Utilities:")
-    print("  26. Continuous Monitoring")
-    print("  27. Run All Tests")
-    print("  0.  Exit")
+    print("\n🔧 Perf Buffer Configuration APIs:")
+    print("  27. Get Perf Buffer Configuration")
     
+    print("\n🛠️  Utilities:")
+    print("  28. Continuous Monitoring")
+    print("  29. Run All Tests")
     print("\n" + "="*60)
 
 def main():
     """Main function"""
     while True:
         show_menu()
-        choice = input("\n🎯 Select an option (0-27): ").strip()
+        choice = input("\n🎯 Select an option (0-29): ").strip()
         
         if choice == '0':
             print("\n👋 Goodbye!")
@@ -1042,11 +1072,14 @@ def main():
         elif choice == '26':
             test_k_config_performance()
         elif choice == '27':
-            continuous_monitoring()
+            print_banner("Get Perf Buffer Configuration")
+            test_perf_buffer_config()
         elif choice == '28':
+            continuous_monitoring()
+        elif choice == '29':
             run_all_tests()
         else:
-            print("❌ Invalid choice! Please select 0-27.")
+            print("❌ Invalid choice! Please select 0-29.")
         
         input("\n📱 Press Enter to continue...")
 
