@@ -12,129 +12,14 @@
 #include <bpf/bpf_endian.h>
 #include "protocols/gtpu.h"
 #include "utils/debug_tool.h"
+#include "include/ebpf_maps.h"
 
 
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define MAX_MAP_ENTRIES 16
-
-// Ring buffer configuration
-#define RINGBUF_SIZE (8 * 1024 * 1024)  // 8MB, can be overridden from Go
-#define WAKE_UP_INTERVAL 16              // Wake up every N events to reduce overhead
-
-// Direction constants for flow processing
-#define DIRECTION_UL 1  // Uplink - need deep parsing (GTP tunneling)
-#define DIRECTION_DL 2  // Downlink - shallow parsing (outer IP only)
-
 // Global variable to track current processing direction
 static __u8 current_direction = 0;
-
-// ---- Global Ring Buffer Event Structure ----
-// Event structure for the global ring buffer (32-64 bytes, 8-byte aligned)
-struct pkt_event {
-    __u64 ts_ns;        // Timestamp (nanoseconds)
-    __u32 saddr_v4;     // IPv4 source address
-    __u32 daddr_v4;     // IPv4 destination address
-    __u32 ifindex;      // Interface index
-    __u16 sport;        // Source port
-    __u16 dport;        // Destination port
-    __u16 len;          // Packet length (L3 or L4)
-    __u8 dir;           // Direction: DIRECTION_UL/DIRECTION_DL
-    __u8 l4;            // L4 protocol: IPPROTO_TCP/UDP/ICMP
-    __u8 tcp_flags;     // TCP flags (0 for non-TCP)
-    __u8 dscp_ecn;      // DSCP/ECN from IP header
-    __u8 ttl_hl;        // TTL/Hop Limit
-    __u8 l3_frag;       // Fragment flags
-    __u8 family;        // Address family (4=IPv4, 6=IPv6)
-    __u8 reserved;      // Reserved for alignment
-    // Total: 28 bytes, 8-byte aligned
-} __attribute__((packed));
-
-// Per-CPU counter for wake-up control
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __uint(max_entries, 1);
-    __type(key, __u32);
-    __type(value, __u64);
-} event_counter SEC(".maps");
-
-// Global event buffer using perf event array (compatible with older kernels)
-struct {
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __uint(max_entries, 0);  // Will be set to number of CPUs by Go loader
-    __type(key, __u32);
-    __type(value, __u32);
-} packet_events SEC(".maps");
-
-// Configuration map for sampling control
-struct sampling_config {
-    __u32 sample_rate;      // 1=all packets, 8=1/8 sampling, etc.
-};
-
-struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __uint(max_entries, 1);
-    __type(key, __u32);
-    __type(value, struct sampling_config);
-} sampling_control SEC(".maps");
-
-struct flow_key {
-    __u8  family;     // 4: IPv4, 6: IPv6
-    __u8  proto;      // IPPROTO_TCP/UDP/ICMP...
-    __u16 pad;        // For alignment
-    // Changed anonymous union to named structure
-    struct {
-        __u32 saddr;  // v4 source address
-        __u32 daddr;  // v4 destination address
-        // IPv6 support preserved but not using anonymous union
-        __u64 saddr_hi; // v6 high bits
-        __u64 saddr_lo; // v6 low bits
-        __u64 daddr_hi; // v6 high bits
-        __u64 daddr_lo; // v6 low bits
-    } addrs;
-    __u16 sport;      // source port
-    __u16 dport;      // destination port
-};
-
-struct flow_stats {
-    __u64 packets;
-    __u64 bytes;
-    __u64 first_ts_ns;
-    __u64 last_ts_ns;
-};
-
-// ---- LPM Trie for UL source IP tracking ----
-struct ip_key {
-    __u32 prefixlen;    // Prefix length (32 for exact match)
-    __u32 addr;         // IPv4 address in network byte order
-};
-
-struct ip_info {
-    __u64 first_seen_ts;    // First time this IP was seen
-    __u64 last_seen_ts;     // Last time this IP was seen
-    __u64 packet_count;     // Number of packets from this IP
-    __u64 byte_count;       // Number of bytes from this IP
-};
-
-// LRU Hash: Automatically evicts inactive flows, controls memory usage.
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 131072);         // Adjust based on node memory/traffic (128K entries)
-    __type(key,   struct flow_key);
-    __type(value, struct flow_stats);
-} flow_statistics SEC(".maps");
-
-
-
-// ---- LPM Trie for tracking UL source IPs ----
-struct {
-    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
-    __uint(max_entries, 65536);             // 64K entries for source IPs
-    __uint(map_flags, BPF_F_NO_PREALLOC);   // Dynamic allocation
-    __type(key, struct ip_key);
-    __type(value, struct ip_info);
-} ul_source_ips SEC(".maps");
 
 /**
  * @brief Check if packet should be sampled based on sampling configuration
