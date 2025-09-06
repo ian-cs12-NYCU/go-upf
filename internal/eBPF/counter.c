@@ -24,6 +24,9 @@ static __u8 current_direction = 0;
 /**
  * @brief Check if packet should be sampled based on sampling configuration
  * 
+ * Uses per-CPU counters for reliable sampling that avoids bias from
+ * periodic traffic patterns or timestamp-based sampling issues.
+ * 
  * @param proto L4 protocol
  * @return 1 if packet should be sampled, 0 otherwise
  */
@@ -36,10 +39,23 @@ static __always_inline int should_sample_packet(__u8 proto) {
         return 1;
     }
     
-    // Apply sample rate (simple modulo-based sampling)
+    // Apply sample rate using per-CPU counter for fair sampling
     if (config->sample_rate > 1) {
-        __u64 ts = bpf_ktime_get_ns();
-        if ((ts / 1000) % config->sample_rate != 0) {
+        __u64 *counter = bpf_map_lookup_elem(&sampling_counter, &key);
+        
+        if (!counter) {
+            // Initialize counter if not found
+            __u64 init_val = 1;
+            bpf_map_update_elem(&sampling_counter, &key, &init_val, BPF_ANY);
+            return 1;  // Sample the first packet
+        }
+        
+        // Increment counter
+        __u64 current_count = *counter + 1;
+        bpf_map_update_elem(&sampling_counter, &key, &current_count, BPF_ANY);
+        
+        // Check if this packet should be sampled
+        if ((current_count % config->sample_rate) != 0) {
             return 0;  // Skip this packet
         }
     }

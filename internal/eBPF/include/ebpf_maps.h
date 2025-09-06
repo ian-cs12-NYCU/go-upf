@@ -20,8 +20,7 @@
 /// Maximum number of entries in maps
 #define MAX_MAP_ENTRIES 16
 
-/// Ring buffer configuration
-#define RINGBUF_SIZE (8 * 1024 * 1024)  ///< 8MB, can be overridden from Go
+/// Perf event configuration
 #define WAKE_UP_INTERVAL 16              ///< Wake up every N events to reduce overhead
 
 /// Direction constants for flow processing
@@ -33,7 +32,7 @@
  * ============================================================================ */
 
 /**
- * @brief Event structure for the global ring buffer (32-64 bytes, 8-byte aligned)
+ * @brief Event structure for packet events (32-64 bytes, 8-byte aligned)
  * 
  * This structure represents packet events that are sent to userspace
  * via perf event array for monitoring and analytics.
@@ -149,6 +148,20 @@ struct {
     __type(key, __u32);
     __type(value, __u64);
 } event_counter SEC(".maps");
+
+/**
+ * @brief Per-CPU sampling counter for fair packet sampling
+ * 
+ * This map ensures reliable packet sampling by using per-CPU counters
+ * instead of timestamp-based sampling, preventing sampling bias from
+ * periodic traffic patterns.
+ */
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);
+} sampling_counter SEC(".maps");
 
 /**
  * @brief Global event buffer using perf event array

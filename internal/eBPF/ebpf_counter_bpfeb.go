@@ -106,6 +106,7 @@ type ebpf_counterMapSpecs struct {
 	FlowStatistics  *ebpf.MapSpec `ebpf:"flow_statistics"`
 	PacketEvents    *ebpf.MapSpec `ebpf:"packet_events"`
 	SamplingControl *ebpf.MapSpec `ebpf:"sampling_control"`
+	SamplingCounter *ebpf.MapSpec `ebpf:"sampling_counter"`
 	UlSourceIps     *ebpf.MapSpec `ebpf:"ul_source_ips"`
 }
 
@@ -140,6 +141,7 @@ type ebpf_counterMaps struct {
 	FlowStatistics  *ebpf.Map `ebpf:"flow_statistics"`
 	PacketEvents    *ebpf.Map `ebpf:"packet_events"`
 	SamplingControl *ebpf.Map `ebpf:"sampling_control"`
+	SamplingCounter *ebpf.Map `ebpf:"sampling_counter"`
 	UlSourceIps     *ebpf.Map `ebpf:"ul_source_ips"`
 }
 
@@ -150,6 +152,7 @@ func (m *ebpf_counterMaps) Close() error {
 		m.FlowStatistics,
 		m.PacketEvents,
 		m.SamplingControl,
+		m.SamplingCounter,
 		m.UlSourceIps,
 	)
 }

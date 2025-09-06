@@ -4,6 +4,7 @@ package ebpf_probe
 
 import (
 	// "context"
+	"fmt"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/free5gc/go-upf/internal/logger"
@@ -88,12 +89,47 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 	}
 	e.PacketEventReader = eventReader
 
+	// Initialize sampling configuration
+	if err := e.initializeSamplingConfig(); err != nil {
+		logger.EbpfLog.Errorf("Failed to initialize sampling config: %v", err)
+		e.detachCounter()
+		return nil, err
+	}
+
 	// Start reading packet events
 	eventReader.Start()
 
 	logger.EbpfLog.Traceln("Check: \n\t\tCounterObj: ", e.CounterObj, " \n\t\tCounterXDPLink(UL): ", e.CounterULXDPLink, " \n\t\tCounterDLTCLink(DL): ", e.CounterDLTCLink)
 	logger.EbpfLog.Traceln("eBPF Probe initialized")
 	return e, nil
+}
+
+// initializeSamplingConfig sets up the sampling configuration in the eBPF map
+func (e *EbpfProbe) initializeSamplingConfig() error {
+	// Get sample rate from config, default to 1 (no sampling)
+	sampleRate := 1
+	if e.Config().Ebpf.Sample_Rate > 0 {
+		sampleRate = e.Config().Ebpf.Sample_Rate
+		logger.EbpfLog.Infof("Using configured sample_rate: %d", sampleRate)
+	} else {
+		logger.EbpfLog.Infof("Using default sample_rate: %d (no sampling)", sampleRate)
+	}
+
+	// Create sampling config structure
+	samplingConfig := struct {
+		SampleRate uint32
+	}{
+		SampleRate: uint32(sampleRate),
+	}
+
+	// Update the sampling_control map
+	key := uint32(0)
+	if err := e.CounterObj.SamplingControl.Put(key, samplingConfig); err != nil {
+		return fmt.Errorf("failed to update sampling control map: %w", err)
+	}
+
+	logger.EbpfLog.Infof("Sampling configuration initialized: sample_rate=%d", sampleRate)
+	return nil
 }
 
 func RemoveProbe(e EbpfProbe) error {

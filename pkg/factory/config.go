@@ -79,8 +79,9 @@ type EbpfConfig struct {
 	UL_InterfaceName string `yaml:"ul_interfaceName" valid:"optional"`
 	DL_InterfaceName string `yaml:"dl_interfaceName" valid:"optional"`
 	DebugMode        bool   `yaml:"debugmode" valid:"optional"`
-	Max_Flows       int    `yaml:"max_flows" valid:"optional"`
-	Default_K       int    `yaml:"default_k" valid:"optional"`
+	Max_Flows        int    `yaml:"max_flows" valid:"optional"`
+	Default_K        int    `yaml:"default_k" valid:"optional"`
+	Sample_Rate      int    `yaml:"sample_rate" valid:"optional"`
 }
 
 type Logger struct {

@@ -1,12 +1,13 @@
 ## 架構一覽
 
 1. eBPF（XDP/TC 掛在 UPF 的 N6/N3/N9 需要的位置）：
-    - 解析封包 → 萃取輕量欄位 → **打包成 event** → **丟進全域 `BPF_MAP_TYPE_RINGBUF`**。
+    - 解析封包 → 萃取輕量欄位 → **打包成 event** → **丟進全域 `BPF_MAP_TYPE_PERF_EVENT_ARRAY`**。
     - 不做重運算，只做抽樣/限流與失敗計數。
 2. Go 使用者態：
-    - 開 ringbuf reader，阻塞讀事件。
+    - 開 perf reader，阻塞讀事件。
     - 以 `map[FlowKey] → 環形佇列（容量 K 可動態）` 維護「每 flow 最近 K 包」。
     - 週期性把每 flow 的彙總（`cnt/bytes/first/last/recentPkts`…）輸出成你的 `connList` JSON。
+
 
 ## How to use
 ```
@@ -96,3 +97,61 @@ $ sudo cat /sys/kernel/debug/tracing/trace | wc -l
 
 $ sudo sh -c 'echo > /sys/kernel/debug/tracing/trace'
 ```
+
+## Performance Optimization Mechanisms
+
+### Dual-Layer Control System
+
+The eBPF probe implements a sophisticated dual-layer control system to optimize performance under high traffic loads:
+
+#### 1. Sampling Control (sample_rate)
+- **Purpose**: Controls which packets are processed and recorded
+- **Implementation**: Time-based modulo sampling using `(timestamp / 1000) % sample_rate`
+- **Examples**:
+  - `sample_rate = 1`: Process all packets (100% sampling)
+  - `sample_rate = 8`: Process ~1/8 of packets (12.5% sampling)
+  - `sample_rate = 16`: Process ~1/16 of packets (6.25% sampling)
+
+#### 2. Wake-up Control (event_counter)
+- **Purpose**: Controls when to wake up userspace for event processing
+- **Implementation**: Per-CPU counter with `WAKE_UP_INTERVAL = 16`
+- **Mechanism**: Userspace is awakened every 16 events, enabling batch processing
+
+### Packet Processing Workflow
+
+```
+Packet Arrival → Sampling Check → Flow Statistics → Event Creation → 
+Counter Increment → Wake-up Decision → Batch Processing in Userspace
+```
+
+1. **Sampling Check**: Packet passes through `should_sample_packet()` filter
+2. **Flow Recording**: If sampled, update flow statistics in eBPF maps
+3. **Event Creation**: Create packet event structure
+4. **Counter Management**: Increment per-CPU event counter
+5. **Conditional Wake-up**: Wake userspace only when `counter % 16 == 0`
+6. **Batch Processing**: Userspace processes multiple events per wake-up
+
+### Performance Benefits
+
+#### A. Sampling Reduces Processing Load
+- Processes only a subset of packets during high traffic
+- Reduces eBPF program computational overhead
+- Minimizes map update operations
+
+#### B. Wake-up Control Reduces Context Switching
+- Batches multiple events before userspace notification
+- Reduces kernel/userspace switching overhead
+- Improves overall system throughput
+
+### Real-world Example
+
+In a high-traffic environment:
+```
+Original Traffic:     100,000 pps (packets per second)
+↓ sample_rate = 10   (10% sampling)
+Processed Packets:    10,000 pps
+↓ WAKE_UP_INTERVAL = 16   (batch processing)
+Wake-up Frequency:    625 times/second (10,000 ÷ 16)
+```
+
+This design maintains monitoring capabilities while significantly reducing system load.
