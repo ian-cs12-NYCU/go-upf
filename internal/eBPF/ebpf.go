@@ -150,3 +150,29 @@ func RemoveProbe(e EbpfProbe) error {
 	logger.EbpfLog.Traceln("eBPF Probe removed")
 	return nil
 }
+
+// GetPerfBufferStats returns perf buffer statistics including lost samples
+func (e *EbpfProbe) GetPerfBufferStats() (*PerfBufferStats, error) {
+	if e.PacketEventReader == nil {
+		return nil, fmt.Errorf("packet event reader not initialized")
+	}
+	return e.PacketEventReader.GetPerfBufferStats(), nil
+}
+
+// GetTotalLostSamples returns the total number of lost samples
+func (e *EbpfProbe) GetTotalLostSamples() (uint64, error) {
+	if e.PacketEventReader == nil {
+		return 0, fmt.Errorf("packet event reader not initialized")
+	}
+	return e.PacketEventReader.GetTotalLostSamples(), nil
+}
+
+// GetPerCPULostSamples returns lost samples statistics per CPU
+func (e *EbpfProbe) GetPerCPULostSamples() (map[int]uint64, error) {
+	if e.PacketEventReader == nil {
+		return nil, fmt.Errorf("packet event reader not initialized")
+	}
+	return e.PacketEventReader.GetPerCPULostSamples(), nil
+}
+
+

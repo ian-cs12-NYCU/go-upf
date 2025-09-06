@@ -428,6 +428,329 @@ def test_perf_buffer_config():
         print(f"❌ Error: {e}")
         return None
 
+def test_perf_buffer_stats():
+    """Test GET /nwdaf-oam/perf-buffer-stats - Get comprehensive perf buffer statistics"""
+    url = f"{BASE_URL}/perf-buffer-stats"
+    try:
+        response = requests.get(url, timeout=10)
+        print_response(response, "Perf Buffer Statistics")
+        
+        if response.status_code == 200:
+            data = response.json()
+            total_lost = data.get('totalLostSamples', 0)
+            per_cpu_lost = data.get('perCPULostSamples', {})
+            total_samples = data.get('totalSamples', 0)
+            lost_rate = data.get('lostSampleRate', 0.0)
+            last_lost_time = data.get('lastLostTimestamp', 'N/A')
+            
+            print(f"\n📊 Perf Buffer Statistics Summary:")
+            print(f"   Total Lost Samples: {total_lost}")
+            print(f"   Total Processed Samples: {total_samples}")
+            print(f"   Lost Sample Rate: {lost_rate:.4f} ({lost_rate*100:.2f}%)")
+            print(f"   Last Lost Event: {last_lost_time}")
+            print(f"   Per-CPU Lost Samples:")
+            
+            if per_cpu_lost:
+                for cpu, count in per_cpu_lost.items():
+                    print(f"     CPU {cpu}: {count} lost samples")
+            else:
+                print("     No per-CPU data available")
+            
+            # Performance assessment
+            if total_lost == 0:
+                print("✅ Excellent: No samples lost")
+            elif lost_rate < 0.01:  # Less than 1%
+                print("✅ Good: Low sample loss rate")
+            elif lost_rate < 0.05:  # Less than 5%
+                print("⚠️  Warning: Moderate sample loss rate")
+            else:
+                print("❌ Critical: High sample loss rate - consider increasing buffer size")
+            
+            return data
+        return None
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return None
+
+def test_perf_buffer_lost_samples():
+    """Test GET /nwdaf-oam/perf-buffer-lost-samples - Get lost samples statistics only"""
+    url = f"{BASE_URL}/perf-buffer-lost-samples"
+    try:
+        response = requests.get(url, timeout=10)
+        print_response(response, "Perf Buffer Lost Samples")
+        
+        if response.status_code == 200:
+            data = response.json()
+            total_lost = data.get('totalLostSamples', 0)
+            per_cpu_lost = data.get('perCPULostSamples', {})
+            
+            print(f"\n📊 Lost Samples Summary:")
+            print(f"   Total Lost Samples: {total_lost}")
+            print(f"   Per-CPU Lost Samples:")
+            
+            if per_cpu_lost:
+                total_cpus = len(per_cpu_lost)
+                max_cpu_lost = max(per_cpu_lost.values()) if per_cpu_lost.values() else 0
+                min_cpu_lost = min(per_cpu_lost.values()) if per_cpu_lost.values() else 0
+                avg_cpu_lost = sum(per_cpu_lost.values()) / total_cpus if total_cpus > 0 else 0
+                
+                for cpu, count in sorted(per_cpu_lost.items()):
+                    percentage = (count / total_lost * 100) if total_lost > 0 else 0
+                    print(f"     CPU {cpu}: {count} lost samples ({percentage:.1f}%)")
+                
+                print(f"\n📈 CPU Statistics:")
+                print(f"   Total CPUs: {total_cpus}")
+                print(f"   Max CPU lost: {max_cpu_lost}")
+                print(f"   Min CPU lost: {min_cpu_lost}")
+                print(f"   Avg CPU lost: {avg_cpu_lost:.1f}")
+            else:
+                print("     No per-CPU data available")
+            
+            return data
+        return None
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return None
+
+def test_perf_buffer_workflow():
+    """Test complete perf buffer monitoring workflow"""
+    print_banner("Perf Buffer Monitoring Workflow Test")
+    
+    # Step 1: Get configuration
+    print("\n🔍 Step 1: Getting perf buffer configuration...")
+    config = test_perf_buffer_config()
+    if not config:
+        print("❌ Cannot proceed without configuration")
+        return
+    
+    time.sleep(1)
+    
+    # Step 2: Get initial statistics
+    print("\n📊 Step 2: Getting initial perf buffer statistics...")
+    initial_stats = test_perf_buffer_stats()
+    if not initial_stats:
+        print("❌ Cannot get initial statistics")
+        return
+    
+    initial_lost = initial_stats.get('totalLostSamples', 0)
+    initial_samples = initial_stats.get('totalSamples', 0)
+    
+    time.sleep(2)
+    
+    # Step 3: Get updated statistics
+    print("\n🔄 Step 3: Getting updated statistics after delay...")
+    url = f"{BASE_URL}/perf-buffer-stats"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            updated_stats = response.json()
+            updated_lost = updated_stats.get('totalLostSamples', 0)
+            updated_samples = updated_stats.get('totalSamples', 0)
+            
+            # Calculate changes
+            lost_delta = updated_lost - initial_lost
+            samples_delta = updated_samples - initial_samples
+            
+            print_response(response, "Updated Perf Buffer Statistics")
+            
+            print(f"\n📈 Changes During Test Period:")
+            print(f"   Lost Samples: {initial_lost} → {updated_lost} (Δ{lost_delta:+d})")
+            print(f"   Total Samples: {initial_samples} → {updated_samples} (Δ{samples_delta:+d})")
+            
+            if lost_delta > 0:
+                print(f"⚠️  Warning: {lost_delta} samples were lost during the test period!")
+                if samples_delta > 0:
+                    new_loss_rate = lost_delta / samples_delta
+                    print(f"   Loss rate during test: {new_loss_rate:.4f} ({new_loss_rate*100:.2f}%)")
+            elif samples_delta > 0:
+                print("✅ Good: No samples lost during the test period")
+            else:
+                print("ℹ️  Info: No new samples processed during the test period")
+        else:
+            print("❌ Failed to get updated statistics")
+    except Exception as e:
+        print(f"❌ Error getting updated statistics: {e}")
+    
+    # Step 4: Get detailed lost samples info
+    print("\n🔍 Step 4: Getting detailed lost samples information...")
+    test_perf_buffer_lost_samples()
+    
+    print("\n🎉 Perf buffer monitoring workflow test completed!")
+
+def test_perf_buffer_stress_monitoring():
+    """Stress test perf buffer monitoring under load"""
+    print_banner("Perf Buffer Stress Monitoring Test")
+    
+    iterations = input("Number of monitoring iterations (default: 10): ").strip()
+    interval = input("Interval between iterations in seconds (default: 1): ").strip()
+    
+    try:
+        iterations = int(iterations) if iterations else 10
+        interval = float(interval) if interval else 1.0
+    except ValueError:
+        iterations = 10
+        interval = 1.0
+    
+    print(f"\n🔄 Starting stress monitoring:")
+    print(f"   Iterations: {iterations}")
+    print(f"   Interval: {interval} seconds")
+    
+    url = f"{BASE_URL}/perf-buffer-stats"
+    results = []
+    errors = 0
+    
+    for i in range(iterations):
+        print(f"\n--- Iteration {i+1}/{iterations} ---")
+        start_time = time.time()
+        
+        try:
+            response = requests.get(url, timeout=5)
+            request_time = time.time() - start_time
+            
+            if response.status_code == 200:
+                data = response.json()
+                lost_samples = data.get('totalLostSamples', 0)
+                total_samples = data.get('totalSamples', 0)
+                lost_rate = data.get('lostSampleRate', 0.0)
+                
+                results.append({
+                    'iteration': i+1,
+                    'lost_samples': lost_samples,
+                    'total_samples': total_samples,
+                    'lost_rate': lost_rate,
+                    'request_time': request_time,
+                    'success': True
+                })
+                
+                print(f"✅ Lost: {lost_samples}, Total: {total_samples}, Rate: {lost_rate:.4f}, Time: {request_time:.3f}s")
+            else:
+                errors += 1
+                print(f"❌ HTTP {response.status_code}: {response.text}")
+                results.append({
+                    'iteration': i+1,
+                    'success': False,
+                    'error': f"HTTP {response.status_code}"
+                })
+        except Exception as e:
+            errors += 1
+            print(f"❌ Error: {e}")
+            results.append({
+                'iteration': i+1,
+                'success': False,
+                'error': str(e)
+            })
+        
+        if i < iterations - 1:  # Don't sleep after the last iteration
+            time.sleep(interval)
+    
+    # Analyze results
+    print(f"\n📊 Stress Test Results:")
+    print(f"   Total iterations: {iterations}")
+    print(f"   Successful requests: {iterations - errors}")
+    print(f"   Failed requests: {errors}")
+    print(f"   Success rate: {(iterations - errors) / iterations * 100:.1f}%")
+    
+    successful_results = [r for r in results if r.get('success', False)]
+    if successful_results:
+        request_times = [r['request_time'] for r in successful_results]
+        avg_time = sum(request_times) / len(request_times)
+        max_time = max(request_times)
+        min_time = min(request_times)
+        
+        print(f"\n⏱️  Performance Metrics:")
+        print(f"   Average response time: {avg_time:.3f}s")
+        print(f"   Max response time: {max_time:.3f}s")
+        print(f"   Min response time: {min_time:.3f}s")
+        
+        # Check for lost samples changes
+        first_lost = successful_results[0]['lost_samples']
+        last_lost = successful_results[-1]['lost_samples']
+        lost_increase = last_lost - first_lost
+        
+        first_total = successful_results[0]['total_samples']
+        last_total = successful_results[-1]['total_samples']
+        total_increase = last_total - first_total
+        
+        print(f"\n📈 Sample Changes During Test:")
+        print(f"   Lost samples: {first_lost} → {last_lost} (Δ{lost_increase:+d})")
+        print(f"   Total samples: {first_total} → {last_total} (Δ{total_increase:+d})")
+        
+        if lost_increase > 0:
+            print(f"⚠️  Warning: {lost_increase} samples were lost during stress test!")
+        else:
+            print("✅ Good: No samples lost during stress test")
+
+def continuous_perf_buffer_monitoring():
+    """Continuous monitoring of perf buffer statistics"""
+    print_banner("Continuous Perf Buffer Monitoring")
+    
+    interval = input("Monitoring interval in seconds (default: 3): ").strip()
+    try:
+        interval = int(interval) if interval else 3
+    except ValueError:
+        interval = 3
+    
+    show_details = input("Show detailed per-CPU statistics? (y/N): ").strip().lower() == 'y'
+    
+    url = f"{BASE_URL}/perf-buffer-stats"
+    print(f"\n🔄 Starting continuous perf buffer monitoring")
+    print(f"📊 Interval: {interval} seconds")
+    print(f"📋 Details: {'Enabled' if show_details else 'Disabled'}")
+    print("Press Ctrl+C to stop\n")
+    
+    try:
+        iteration = 1
+        last_lost = None
+        last_total = None
+        while True:
+            print(f"\n--- Iteration {iteration} ({time.strftime('%Y-%m-%d %H:%M:%S')}) ---")
+            try:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    current_lost = data.get('totalLostSamples', 0)
+                    current_total = data.get('totalSamples', 0)
+                    lost_rate = data.get('lostSampleRate', 0.0)
+                    per_cpu_lost = data.get('perCPULostSamples', {})
+                    last_lost_time = data.get('lastLostTimestamp', 'N/A')
+                    
+                    # Calculate deltas
+                    lost_delta = current_lost - last_lost if last_lost is not None else 0
+                    total_delta = current_total - last_total if last_total is not None else 0
+                    
+                    print(f"📊 Lost samples: {current_lost} (Δ{lost_delta:+d})")
+                    print(f"📊 Total samples: {current_total} (Δ{total_delta:+d})")
+                    print(f"📊 Lost rate: {lost_rate:.4f} ({lost_rate*100:.2f}%)")
+                    print(f"📊 Last lost: {last_lost_time}")
+                    print(f"⏱️  Response time: {response.elapsed.total_seconds():.3f}s")
+                    
+                    if show_details and per_cpu_lost:
+                        print(f"🖥️  Per-CPU lost samples:")
+                        for cpu in sorted(per_cpu_lost.keys()):
+                            count = per_cpu_lost[cpu]
+                            print(f"     CPU {cpu}: {count}")
+                    
+                    # Status assessment
+                    if lost_delta > 0:
+                        print("⚠️  Status: Samples lost in this interval!")
+                    elif total_delta > 0:
+                        print("✅ Status: Processing samples without loss")
+                    else:
+                        print("ℹ️  Status: No new samples")
+                    
+                    last_lost = current_lost
+                    last_total = current_total
+                else:
+                    print(f"❌ Error: HTTP {response.status_code}")
+                    print(f"📄 Response: {response.text}")
+            except Exception as e:
+                print(f"❌ Error: {e}")
+            
+            iteration += 1
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\n\n🛑 Monitoring stopped by user")
+
 def test_k_config_get():
     """Test GET /nwdaf-oam/defaultK - Get current global default K"""
     url = f"{BASE_URL}/defaultK"
@@ -866,8 +1189,9 @@ def continuous_monitoring():
     print("5. Source IPs Stats")
     print("6. Sampling Configuration")
     print("7. K Configuration")
+    print("8. Perf Buffer Statistics")
     
-    choice = input("\nSelect API to monitor (1-7): ").strip()
+    choice = input("\nSelect API to monitor (1-8): ").strip()
     interval = input("Monitoring interval in seconds (default: 5): ").strip()
     
     try:
@@ -882,7 +1206,8 @@ def continuous_monitoring():
         '4': (f"{BASE_URL}/source-ips/count", "Source IPs Count"),
         '5': (f"{BASE_URL}/source-ips/stats", "Source IPs Stats"),
         '6': (f"{BASE_URL}/sampling-config", "Sampling Configuration"),
-        '7': (f"{BASE_URL}/defaultK", "K Configuration")
+        '7': (f"{BASE_URL}/defaultK", "K Configuration"),
+        '8': (f"{BASE_URL}/perf-buffer-stats", "Perf Buffer Statistics")
     }
     
     if choice not in api_map:
@@ -894,6 +1219,9 @@ def continuous_monitoring():
         return
     elif choice == '7':
         continuous_k_monitoring()
+        return
+    elif choice == '8':
+        continuous_perf_buffer_monitoring()
         return
     
     url, name = api_map[choice]
@@ -923,6 +1251,9 @@ def run_all_tests():
     test_functions = [
         ("Health Check", health_check),
         ("NF Resource", test_nf_resource),
+        ("Perf Buffer Configuration", test_perf_buffer_config),
+        ("Perf Buffer Statistics", test_perf_buffer_stats),
+        ("Perf Buffer Lost Samples", test_perf_buffer_lost_samples),
         ("Sampling Configuration (Get)", test_sampling_config_get),
         ("Flow Statistics (All)", test_flow_statistics_all),
         ("Flow Count", test_flow_count),
@@ -983,17 +1314,21 @@ def show_menu():
     
     print("\n🔧 Perf Buffer Configuration APIs:")
     print("  27. Get Perf Buffer Configuration")
+    print("  28. Get Perf Buffer Statistics")
+    print("  29. Get Perf Buffer Lost Samples")
+    print("  30. Perf Buffer Workflow Test")
+    print("  31. Perf Buffer Stress Monitoring")
     
     print("\n🛠️  Utilities:")
-    print("  28. Continuous Monitoring")
-    print("  29. Run All Tests")
+    print("  32. Continuous Monitoring")
+    print("  33. Run All Tests")
     print("\n" + "="*60)
 
 def main():
     """Main function"""
     while True:
         show_menu()
-        choice = input("\n🎯 Select an option (0-29): ").strip()
+        choice = input("\n🎯 Select an option (0-33): ").strip()
         
         if choice == '0':
             print("\n👋 Goodbye!")
@@ -1075,11 +1410,21 @@ def main():
             print_banner("Get Perf Buffer Configuration")
             test_perf_buffer_config()
         elif choice == '28':
-            continuous_monitoring()
+            print_banner("Get Perf Buffer Statistics")
+            test_perf_buffer_stats()
         elif choice == '29':
+            print_banner("Get Perf Buffer Lost Samples")
+            test_perf_buffer_lost_samples()
+        elif choice == '30':
+            test_perf_buffer_workflow()
+        elif choice == '31':
+            test_perf_buffer_stress_monitoring()
+        elif choice == '32':
+            continuous_monitoring()
+        elif choice == '33':
             run_all_tests()
         else:
-            print("❌ Invalid choice! Please select 0-29.")
+            print("❌ Invalid choice! Please select 0-33.")
         
         input("\n📱 Press Enter to continue...")
 

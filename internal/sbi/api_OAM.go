@@ -42,6 +42,18 @@ func (s *Server) getKValueManagementRoutes() []Route {
 			s.HandleGetPerfBufferConfig,
 		},
 		{
+			"GetPerfBufferStats",
+			"GET",
+			"/perf-buffer-stats",
+			s.HandleGetPerfBufferStats,
+		},
+		{
+			"GetPerfBufferLostSamples",
+			"GET",
+			"/perf-buffer-lost-samples",
+			s.HandleGetPerfBufferLostSamples,
+		},
+		{
 			"GetFlowK",
 			"GET",
 			"/flows/:srcIP/:srcPort/:dstIP/:dstPort/:protocol/k",
@@ -304,3 +316,60 @@ func (s *Server) HandleGetPerfBufferConfig(c *gin.Context) {
 		"enabled":        true,
 	})
 }
+
+// HandleGetPerfBufferStats handles GET requests for comprehensive perf buffer statistics
+func (s *Server) HandleGetPerfBufferStats(c *gin.Context) {
+	ebpfProbe := s.GetEbpfProbe()
+
+	if ebpfProbe == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "eBPF probe not available",
+		})
+		return
+	}
+
+	stats, err := ebpfProbe.GetPerfBufferStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
+}
+
+// HandleGetPerfBufferLostSamples handles GET requests for lost samples statistics only
+func (s *Server) HandleGetPerfBufferLostSamples(c *gin.Context) {
+	ebpfProbe := s.GetEbpfProbe()
+
+	if ebpfProbe == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "eBPF probe not available",
+		})
+		return
+	}
+
+	totalLost, err := ebpfProbe.GetTotalLostSamples()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	perCPULost, err := ebpfProbe.GetPerCPULostSamples()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"totalLostSamples":  totalLost,
+		"perCPULostSamples": perCPULost,
+	})
+}
+
+

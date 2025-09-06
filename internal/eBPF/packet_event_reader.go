@@ -73,6 +73,15 @@ type FlowState struct {
 	mu         sync.RWMutex // Mutex for thread safety
 }
 
+// PerfBufferStats represents perf buffer statistics
+type PerfBufferStats struct {
+	TotalLostSamples   uint64            `json:"totalLostSamples"`   // Total lost samples across all CPUs
+	PerCPULostSamples  map[int]uint64    `json:"perCPULostSamples"`  // Lost samples per CPU
+	TotalSamples       uint64            `json:"totalSamples"`       // Total processed samples
+	LostSampleRate     float64           `json:"lostSampleRate"`     // Lost sample rate (lost/total)
+	LastLostTimestamp  time.Time         `json:"lastLostTimestamp"`  // Timestamp of last lost event
+}
+
 // PacketEventReader manages reading events from packet_events perf buffer
 type PacketEventReader struct {
 	probe          *EbpfProbe
@@ -85,6 +94,13 @@ type PacketEventReader struct {
 	cancel         context.CancelFunc
 	mu             sync.RWMutex
 	wg             sync.WaitGroup
+	
+	// LOST samples statistics
+	totalLostSamples   uint64            // Total lost samples across all CPUs
+	perCPULostSamples  map[int]uint64    // Lost samples per CPU
+	totalSamples       uint64            // Total processed samples
+	lastLostTimestamp  time.Time         // Timestamp of last lost event
+	lostSamplesMu      sync.RWMutex      // Mutex for lost samples statistics
 }
 
 // NewPacketEventReader creates a new packet event reader
@@ -92,13 +108,14 @@ func NewPacketEventReader(probe *EbpfProbe, maxFlows, defaultK, perfBufferSize i
 	ctx, cancel := context.WithCancel(context.Background())
 
 	reader := &PacketEventReader{
-		probe:          probe,
-		flows:          make(map[string]*FlowState),
-		maxFlows:       maxFlows,
-		defaultK:       defaultK,
-		perfBufferSize: perfBufferSize,
-		ctx:            ctx,
-		cancel:         cancel,
+		probe:             probe,
+		flows:             make(map[string]*FlowState),
+		maxFlows:          maxFlows,
+		defaultK:          defaultK,
+		perfBufferSize:    perfBufferSize,
+		ctx:               ctx,
+		cancel:            cancel,
+		perCPULostSamples: make(map[int]uint64),
 	}
 
 	// Initialize perf reader with configurable buffer size
@@ -150,15 +167,27 @@ func (r *PacketEventReader) readEventLoop() {
 				continue
 			}
 
-			// Parse packet event
-			event, err := r.parsePacketEvent(record.RawSample)
-			if err != nil {
-				logger.EbpfLog.Errorf("Error parsing packet event: %v", err)
-				continue
+			// Check for lost samples
+			if record.LostSamples > 0 {
+				r.updateLostSamples(record.CPU, record.LostSamples)
+				logger.EbpfLog.Warnf("Lost %d samples on CPU %d", record.LostSamples, record.CPU)
 			}
 
-			// Process the event
-			r.processPacketEvent(event)
+			// Process actual packet events only if there's sample data
+			if len(record.RawSample) > 0 {
+				// Increment total samples counter
+				r.incrementTotalSamples()
+
+				// Parse packet event
+				event, err := r.parsePacketEvent(record.RawSample)
+				if err != nil {
+					logger.EbpfLog.Errorf("Error parsing packet event: %v", err)
+					continue
+				}
+
+				// Process the event
+				r.processPacketEvent(event)
+			}
 		}
 	}
 }
@@ -557,3 +586,69 @@ func (r *PacketEventReader) ValidateSamplingRate(sampleRate int) error {
 
 	return nil
 }
+
+// updateLostSamples updates the lost samples statistics
+func (r *PacketEventReader) updateLostSamples(cpu int, lostCount uint64) {
+	r.lostSamplesMu.Lock()
+	defer r.lostSamplesMu.Unlock()
+
+	r.totalLostSamples += lostCount
+	r.perCPULostSamples[cpu] += lostCount
+	r.lastLostTimestamp = time.Now()
+}
+
+// incrementTotalSamples increments the total samples counter
+func (r *PacketEventReader) incrementTotalSamples() {
+	r.lostSamplesMu.Lock()
+	defer r.lostSamplesMu.Unlock()
+	r.totalSamples++
+}
+
+// GetPerfBufferStats returns comprehensive perf buffer statistics
+func (r *PacketEventReader) GetPerfBufferStats() *PerfBufferStats {
+	r.lostSamplesMu.RLock()
+	defer r.lostSamplesMu.RUnlock()
+
+	// Create a copy of per-CPU lost samples
+	perCPUCopy := make(map[int]uint64)
+	for cpu, count := range r.perCPULostSamples {
+		perCPUCopy[cpu] = count
+	}
+
+	// Calculate lost sample rate
+	var lostSampleRate float64
+	totalEvents := r.totalSamples + r.totalLostSamples
+	if totalEvents > 0 {
+		lostSampleRate = float64(r.totalLostSamples) / float64(totalEvents)
+	}
+
+	return &PerfBufferStats{
+		TotalLostSamples:  r.totalLostSamples,
+		PerCPULostSamples: perCPUCopy,
+		TotalSamples:      r.totalSamples,
+		LostSampleRate:    lostSampleRate,
+		LastLostTimestamp: r.lastLostTimestamp,
+	}
+}
+
+// GetTotalLostSamples returns the total number of lost samples
+func (r *PacketEventReader) GetTotalLostSamples() uint64 {
+	r.lostSamplesMu.RLock()
+	defer r.lostSamplesMu.RUnlock()
+	return r.totalLostSamples
+}
+
+// GetPerCPULostSamples returns lost samples statistics per CPU
+func (r *PacketEventReader) GetPerCPULostSamples() map[int]uint64 {
+	r.lostSamplesMu.RLock()
+	defer r.lostSamplesMu.RUnlock()
+
+	// Return a copy to avoid race conditions
+	result := make(map[int]uint64)
+	for cpu, count := range r.perCPULostSamples {
+		result[cpu] = count
+	}
+	return result
+}
+
+

@@ -137,6 +137,19 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Pattern: "/perf-buffer-config",
 			APIFunc: s.HandleGetPerfBufferConfig,
 		},
+		// Perf Buffer Statistics APIs
+		{
+			Name:    "PerfBufferStatsGet",
+			Method:  http.MethodGet,
+			Pattern: "/perf-buffer-stats",
+			APIFunc: s.HandleGetPerfBufferStats,
+		},
+		{
+			Name:    "PerfBufferLostSamplesGet",
+			Method:  http.MethodGet,
+			Pattern: "/perf-buffer-lost-samples",
+			APIFunc: s.HandleGetPerfBufferLostSamples,
+		},
 		{
 			Name:    "FlowKGet",
 			Method:  http.MethodGet,
