@@ -336,3 +336,57 @@ func (r *PacketEventReader) GetFlowCount() int {
 	defer r.mu.RUnlock()
 	return len(r.flows)
 }
+
+// SamplingConfig represents the sampling configuration structure
+type SamplingConfig struct {
+	SampleRate uint32 `json:"sample_rate"`
+}
+
+// GetSamplingRate retrieves the current sampling rate from the eBPF map
+func (r *PacketEventReader) GetSamplingRate() (int, error) {
+	var samplingConfig SamplingConfig
+	key := uint32(0)
+
+	// Read from the eBPF map
+	if err := r.probe.CounterObj.SamplingControl.Lookup(key, &samplingConfig); err != nil {
+		return 0, fmt.Errorf("failed to read sampling rate from eBPF map: %w", err)
+	}
+
+	return int(samplingConfig.SampleRate), nil
+}
+
+// SetSamplingRate updates the sampling rate in the eBPF map
+func (r *PacketEventReader) SetSamplingRate(sampleRate int) error {
+	if sampleRate <= 0 {
+		return fmt.Errorf("sample rate must be greater than 0, got: %d", sampleRate)
+	}
+
+	// Create sampling config structure
+	samplingConfig := SamplingConfig{
+		SampleRate: uint32(sampleRate),
+	}
+
+	// Update the eBPF map
+	key := uint32(0)
+	if err := r.probe.CounterObj.SamplingControl.Put(key, samplingConfig); err != nil {
+		return fmt.Errorf("failed to update sampling rate in eBPF map: %w", err)
+	}
+
+	logger.EbpfLog.Infof("Successfully updated sampling rate to: %d", sampleRate)
+	return nil
+}
+
+// ValidateSamplingRate performs validation on the sampling rate value
+func (r *PacketEventReader) ValidateSamplingRate(sampleRate int) error {
+	if sampleRate <= 0 {
+		return fmt.Errorf("sample rate must be greater than 0")
+	}
+
+	// Add additional validation if needed (e.g., maximum allowed rate)
+	const maxSampleRate = 1000000 // 1M packets per sample
+	if sampleRate > maxSampleRate {
+		return fmt.Errorf("sample rate too high, maximum allowed: %d", maxSampleRate)
+	}
+
+	return nil
+}

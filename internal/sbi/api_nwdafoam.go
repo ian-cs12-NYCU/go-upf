@@ -99,6 +99,25 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Pattern: "/source-ips",
 			APIFunc: s.UpfOamSourceIPsClear,
 		},
+		// Sampling Configuration APIs
+		{
+			Name:    "SamplingConfigGet",
+			Method:  http.MethodGet,
+			Pattern: "/sampling-config",
+			APIFunc: s.UpfOamSamplingConfigGet,
+		},
+		{
+			Name:    "SamplingConfigUpdate",
+			Method:  http.MethodPut,
+			Pattern: "/sampling-config",
+			APIFunc: s.UpfOamSamplingConfigUpdate,
+		},
+		{
+			Name:    "SamplingConfigUpdateByParam",
+			Method:  http.MethodPut,
+			Pattern: "/sampling-config/:rate",
+			APIFunc: s.UpfOamSamplingConfigUpdateByParam,
+		},
 	}
 }
 
@@ -170,4 +189,21 @@ func (s *Server) UpfOamSourceIPsStatsGet(c *gin.Context) {
 // UpfOamSourceIPsClear handles DELETE /source-ips - clears all tracked source IPs
 func (s *Server) UpfOamSourceIPsClear(c *gin.Context) {
 	s.processor.ClearULSourceIPs(c)
+}
+
+// Sampling Configuration API handlers
+
+// UpfOamSamplingConfigGet handles GET /sampling-config - retrieves current sampling configuration
+func (s *Server) UpfOamSamplingConfigGet(c *gin.Context) {
+	s.processor.GetSamplingConfig(c)
+}
+
+// UpfOamSamplingConfigUpdate handles PUT /sampling-config - updates sampling configuration
+func (s *Server) UpfOamSamplingConfigUpdate(c *gin.Context) {
+	s.processor.UpdateSamplingConfig(c)
+}
+
+// UpfOamSamplingConfigUpdateByParam handles PUT /sampling-config/{rate} - updates sampling configuration via URL parameter
+func (s *Server) UpfOamSamplingConfigUpdateByParam(c *gin.Context) {
+	s.processor.UpdateSamplingConfigByParam(c)
 }

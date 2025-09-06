@@ -17,7 +17,7 @@ testtools/ebpf_test/
 ### Prerequisites
 - Python 3.6+
 - requests library: `pip install requests`
-- UPF service running on `127.0.0.8:8000`
+- UPF service running on `127.0.0.8:8888`
 
 ### Install Dependencies
 ```bash
@@ -49,6 +49,11 @@ Provides a complete interactive menu to test specific APIs.
 - **Top Source IPs**: `GET /nwdaf-oam/source-ips/top`
 - **Source IPs Statistics**: `GET /nwdaf-oam/source-ips/stats`
 - **Clear Source IPs**: `DELETE /nwdaf-oam/source-ips`
+
+### 🎛️ Sampling Configuration APIs
+- **Get Sampling Configuration**: `GET /nwdaf-oam/sampling-config`
+- **Update Sampling Configuration (JSON)**: `PUT /nwdaf-oam/sampling-config`
+- **Update Sampling Configuration (URL Param)**: `PUT /nwdaf-oam/sampling-config/{rate}`
 
 ### ⚙️ System APIs
 - **Health Check**: `GET /nwdaf-oam/`
@@ -86,11 +91,24 @@ python main.py
 > Set monitoring interval
 ```
 
-### 3. Run All Tests
+### 4. Test Sampling Configuration
 ```bash
-# Use main.py, select option 16
+# Use main.py, select sampling configuration options
 python main.py
-> Select: 16. Run All Tests
+> Select: 15. Get Sampling Configuration
+> Select: 16. Update Sampling Configuration (JSON)
+> Select: 17. Update Sampling Configuration (URL Param)
+> Select: 18. Sampling Configuration Workflow Test
+> Select: 19. Sampling Configuration Error Cases
+```
+
+### 5. Sampling Configuration Continuous Monitoring
+```bash
+# Use main.py, select option 20, then option 6
+python main.py
+> Select: 20. Continuous Monitoring
+> Select: 6. Sampling Configuration
+> Set monitoring interval
 ```
 
 ## 📊 Output Format
