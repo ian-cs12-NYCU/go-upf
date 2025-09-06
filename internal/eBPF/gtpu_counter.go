@@ -288,29 +288,23 @@ func (e *EbpfProbe) detachCounter() error {
 }
 
 // GetFlows retrieves combined flow data (statistics + packet records)
-// This is a high-level API that combines data from GetFlowStatistics and GetAllFlowPacketRecords
+// This is a high-level API that combines data from GetFlowStatistics and PacketEventReader
 func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 	logger.EbpfLog.Infoln("Retrieving combined flow data (statistics + packet records)")
 
-	// Get flow statistics
+	// Get flow statistics from eBPF maps
 	flowStats, err := e.GetFlowStatistics()
 	if err != nil {
 		return []Flows{}, fmt.Errorf("getting flow statistics: %s", err)
 	}
 
-	// Get packet records for all flows
-	packetRecords, err := e.GetAllFlowPacketRecords()
-	if err != nil {
-		logger.EbpfLog.Warnf("Failed to get packet records: %s", err)
-		// Continue without packet records if ring buffer data is not available
-		packetRecords = []FlowPacketRecords{}
-	}
-
-	// Create a map for quick lookup of packet records by flow key
-	recordsMap := make(map[string][]PacketRecord)
-	for _, record := range packetRecords {
-		key := fmt.Sprintf("%s:%d->%s:%d", record.SrcIP, record.SrcPort, record.DstIP, record.DstPort)
-		recordsMap[key] = record.RecentPkts
+	// Get packet records from PacketEventReader if available
+	var flowStatesMap map[string]*FlowState
+	if e.PacketEventReader != nil {
+		flowStatesMap = e.PacketEventReader.GetAllFlows()
+	} else {
+		logger.EbpfLog.Warnf("PacketEventReader not available, continuing without packet records")
+		flowStatesMap = make(map[string]*FlowState)
 	}
 
 	// Combine statistics with packet records
@@ -326,10 +320,21 @@ func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 			LastTS:  stat.LastTS,
 		}
 
-		// Add packet records if available
-		key := fmt.Sprintf("%s:%d->%s:%d", stat.SrcIP, stat.SrcPort, stat.DstIP, stat.DstPort)
-		if records, exists := recordsMap[key]; exists {
-			flow.RecentPkts = records
+		// Look for corresponding flow state to get packet records
+		key := fmt.Sprintf("%s:%d->%s:%d(%d)", stat.SrcIP, stat.SrcPort, stat.DstIP, stat.DstPort, 6) // Assume TCP for now
+		if flowState, exists := flowStatesMap[key]; exists {
+			// Convert PacketInfo to PacketRecord
+			flow.RecentPkts = make([]PacketRecord, len(flowState.RecentPkts))
+			for i, pktInfo := range flowState.RecentPkts {
+				flow.RecentPkts[i] = PacketRecord{
+					TS:        pktInfo.TS,
+					Length:    uint32(pktInfo.Length),
+					Protocol:  pktInfo.Protocol,
+					Direction: pktInfo.Direction,
+					TCPFlags:  pktInfo.TCPFlags,
+					DSCP_ECN:  pktInfo.DSCP_ECN,
+				}
+			}
 		} else {
 			flow.RecentPkts = []PacketRecord{} // Empty slice if no records found
 		}
@@ -339,4 +344,127 @@ func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 
 	logger.EbpfLog.Infof("Retrieved combined data for %d flows", len(flows))
 	return flows, nil
+}
+
+// FlowPacketRecords represents packet records for a specific flow (for API compatibility)
+type FlowPacketRecords struct {
+	SrcIP      net.IP         `json:"srcIP"`      // Source IP
+	DstIP      net.IP         `json:"dstIP"`      // Destination IP
+	SrcPort    uint16         `json:"srcPort"`    // Source port
+	DstPort    uint16         `json:"dstPort"`    // Destination port
+	RecentPkts []PacketRecord `json:"recentPkts"` // Recent packet records
+}
+
+// GetAllFlowPacketRecords retrieves packet records for all flows from PacketEventReader
+func (e *EbpfProbe) GetAllFlowPacketRecords() ([]FlowPacketRecords, error) {
+	if e.PacketEventReader == nil {
+		return nil, fmt.Errorf("PacketEventReader not available")
+	}
+
+	// Get all flows from PacketEventReader
+	flowStatesMap := e.PacketEventReader.GetAllFlows()
+
+	var flowRecords []FlowPacketRecords
+
+	// Convert FlowState to FlowPacketRecords
+	for _, flowState := range flowStatesMap {
+		flowRecord := FlowPacketRecords{
+			SrcIP:   flowState.FlowKey.SrcIP,
+			SrcPort: flowState.FlowKey.SrcPort,
+			DstIP:   flowState.FlowKey.DstIP,
+			DstPort: flowState.FlowKey.DstPort,
+		}
+
+		// Convert PacketInfo to PacketRecord
+		flowRecord.RecentPkts = make([]PacketRecord, len(flowState.RecentPkts))
+		for i, pktInfo := range flowState.RecentPkts {
+			flowRecord.RecentPkts[i] = PacketRecord{
+				TS:        pktInfo.TS,
+				Length:    uint32(pktInfo.Length),
+				Protocol:  pktInfo.Protocol,
+				Direction: pktInfo.Direction,
+				TCPFlags:  pktInfo.TCPFlags,
+				DSCP_ECN:  pktInfo.DSCP_ECN,
+			}
+		}
+
+		flowRecords = append(flowRecords, flowRecord)
+	}
+
+	logger.EbpfLog.Infof("Retrieved packet records for %d flows", len(flowRecords))
+	return flowRecords, nil
+}
+
+// GetFlowPacketRecordsByKey retrieves packet records for a specific flow
+func (e *EbpfProbe) GetFlowPacketRecordsByKey(srcIP net.IP, dstIP net.IP, srcPort, dstPort uint16) (*FlowPacketRecords, error) {
+	if e.PacketEventReader == nil {
+		return nil, fmt.Errorf("PacketEventReader not available")
+	}
+
+	// Create flow key to search for
+	flowKey := FlowKey{
+		Family:  4, // Assume IPv4 for now
+		L4:      6, // Assume TCP for now (could be enhanced to detect protocol)
+		SrcIP:   srcIP,
+		DstIP:   dstIP,
+		SrcPort: srcPort,
+		DstPort: dstPort,
+	}
+
+	// Get flow state from PacketEventReader
+	flowState := e.PacketEventReader.GetFlowByKey(flowKey)
+	if flowState == nil {
+		return nil, fmt.Errorf("packet records not found for flow %s:%d -> %s:%d",
+			srcIP, srcPort, dstIP, dstPort)
+	}
+
+	flowRecord := &FlowPacketRecords{
+		SrcIP:   srcIP,
+		SrcPort: srcPort,
+		DstIP:   dstIP,
+		DstPort: dstPort,
+	}
+
+	// Convert PacketInfo to PacketRecord
+	flowRecord.RecentPkts = make([]PacketRecord, len(flowState.RecentPkts))
+	for i, pktInfo := range flowState.RecentPkts {
+		flowRecord.RecentPkts[i] = PacketRecord{
+			TS:        pktInfo.TS,
+			Length:    uint32(pktInfo.Length),
+			Protocol:  pktInfo.Protocol,
+			Direction: pktInfo.Direction,
+			TCPFlags:  pktInfo.TCPFlags,
+			DSCP_ECN:  pktInfo.DSCP_ECN,
+		}
+	}
+
+	logger.EbpfLog.Infof("Retrieved %d packet records for flow %s:%d -> %s:%d",
+		len(flowRecord.RecentPkts), srcIP, srcPort, dstIP, dstPort)
+	return flowRecord, nil
+}
+
+// GetFlowCount returns the total number of flows being tracked
+func (e *EbpfProbe) GetFlowCount() (int, error) {
+	if e.PacketEventReader != nil {
+		// Use PacketEventReader count if available
+		return e.PacketEventReader.GetFlowCount(), nil
+	}
+
+	// Fallback to eBPF map count
+	connMap, err := e.CounterObj.FlowStatistics.Clone()
+	if err != nil {
+		return 0, fmt.Errorf("cloning flow statistics map: %s", err)
+	}
+
+	count := 0
+	var key ebpf_counterFlowKey
+	var value ebpf_counterFlowStats
+
+	iter := connMap.Iterate()
+	for iter.Next(&key, &value) {
+		count++
+	}
+
+	logger.EbpfLog.Infof("Total flows being tracked: %d", count)
+	return count, nil
 }

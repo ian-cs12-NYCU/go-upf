@@ -49,18 +49,7 @@ type ebpf_counterIpKey struct {
 	Addr      uint32
 }
 
-type ebpf_counterPktRing struct {
-	Head  uint32
-	Count uint32
-	Recs  [16]struct {
-		TsNs     uint64
-		Len      uint32
-		L4       uint8
-		Dir      uint8
-		TcpFlags uint8
-		DscpEcn  uint8
-	}
-}
+type ebpf_counterSamplingConfig struct{ SampleRate uint32 }
 
 // loadEbpf_counter returns the embedded CollectionSpec for ebpf_counter.
 func loadEbpf_counter() (*ebpf.CollectionSpec, error) {
@@ -112,10 +101,12 @@ type ebpf_counterProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type ebpf_counterMapSpecs struct {
-	DebugFlags     *ebpf.MapSpec `ebpf:"debug_flags"`
-	FlowRecentPkts *ebpf.MapSpec `ebpf:"flow_recent_pkts"`
-	FlowStatistics *ebpf.MapSpec `ebpf:"flow_statistics"`
-	UlSourceIps    *ebpf.MapSpec `ebpf:"ul_source_ips"`
+	DebugFlags      *ebpf.MapSpec `ebpf:"debug_flags"`
+	EventCounter    *ebpf.MapSpec `ebpf:"event_counter"`
+	FlowStatistics  *ebpf.MapSpec `ebpf:"flow_statistics"`
+	PacketEvents    *ebpf.MapSpec `ebpf:"packet_events"`
+	SamplingControl *ebpf.MapSpec `ebpf:"sampling_control"`
+	UlSourceIps     *ebpf.MapSpec `ebpf:"ul_source_ips"`
 }
 
 // ebpf_counterVariableSpecs contains global variables before they are loaded into the kernel.
@@ -144,17 +135,21 @@ func (o *ebpf_counterObjects) Close() error {
 //
 // It can be passed to loadEbpf_counterObjects or ebpf.CollectionSpec.LoadAndAssign.
 type ebpf_counterMaps struct {
-	DebugFlags     *ebpf.Map `ebpf:"debug_flags"`
-	FlowRecentPkts *ebpf.Map `ebpf:"flow_recent_pkts"`
-	FlowStatistics *ebpf.Map `ebpf:"flow_statistics"`
-	UlSourceIps    *ebpf.Map `ebpf:"ul_source_ips"`
+	DebugFlags      *ebpf.Map `ebpf:"debug_flags"`
+	EventCounter    *ebpf.Map `ebpf:"event_counter"`
+	FlowStatistics  *ebpf.Map `ebpf:"flow_statistics"`
+	PacketEvents    *ebpf.Map `ebpf:"packet_events"`
+	SamplingControl *ebpf.Map `ebpf:"sampling_control"`
+	UlSourceIps     *ebpf.Map `ebpf:"ul_source_ips"`
 }
 
 func (m *ebpf_counterMaps) Close() error {
 	return _Ebpf_counterClose(
 		m.DebugFlags,
-		m.FlowRecentPkts,
+		m.EventCounter,
 		m.FlowStatistics,
+		m.PacketEvents,
+		m.SamplingControl,
 		m.UlSourceIps,
 	)
 }

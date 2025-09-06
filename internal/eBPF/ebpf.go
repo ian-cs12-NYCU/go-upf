@@ -25,6 +25,7 @@ type EbpfProbe struct {
 	CounterDLTCLink   link.Link          // TC link for downlink interface (egress)
 	CounterDLTCFilter *netlink.BpfFilter // TC filter for downlink interface
 	DLIfaceIndex      int                // Downlink interface index for TC operations
+	PacketEventReader *PacketEventReader // Packet event reader for global events
 }
 
 func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
@@ -60,21 +61,46 @@ func NewEbpfProbe(upf Upf) (*EbpfProbe, error) {
 		return nil, err
 	}
 
-	// Log status based on what was actually attached
-	if e.CounterULXDPLink != nil {
-		logger.EbpfLog.Traceln("eBPF Probe attached to interface (UL XDP):", e.XdpULIfName)
+	// Initialize packet event reader with configurable parameters
+	maxFlows := 100000 // Default maximum 100K flows
+	defaultK := 16     // Default 16 recent packets per flow
+
+	// Override with config values if provided
+	if upf.Config().Ebpf.Max_Flows > 0 {
+		maxFlows = upf.Config().Ebpf.Max_Flows
+		logger.EbpfLog.Infof("Using configured max_flows: %d", maxFlows)
+	} else {
+		logger.EbpfLog.Infof("Using default max_flows: %d", maxFlows)
 	}
-	if e.CounterDLTCLink != nil || dlIfName != "" {
-		logger.EbpfLog.Traceln("eBPF Probe attached to interface (DL TC egress):", e.TCEgressDLIfName)
+
+	if upf.Config().Ebpf.Default_K > 0 {
+		defaultK = upf.Config().Ebpf.Default_K
+		logger.EbpfLog.Infof("Using configured default_k: %d", defaultK)
+	} else {
+		logger.EbpfLog.Infof("Using default default_k: %d", defaultK)
 	}
+
+	eventReader, err := NewPacketEventReader(e, maxFlows, defaultK)
+	if err != nil {
+		logger.EbpfLog.Errorf("Failed to create packet event reader: %v", err)
+		e.detachCounter()
+		return nil, err
+	}
+	e.PacketEventReader = eventReader
+
+	// Start reading packet events
+	eventReader.Start()
 
 	logger.EbpfLog.Traceln("Check: \n\t\tCounterObj: ", e.CounterObj, " \n\t\tCounterXDPLink(UL): ", e.CounterULXDPLink, " \n\t\tCounterDLTCLink(DL): ", e.CounterDLTCLink)
 	logger.EbpfLog.Traceln("eBPF Probe initialized")
 	return e, nil
 }
 
-// TODO: Implement a function to remove eBPF probe
 func RemoveProbe(e EbpfProbe) error {
+	// Stop packet event reader
+	if e.PacketEventReader != nil {
+		e.PacketEventReader.Stop()
+	}
 
 	e.detachCounter()
 	logger.EbpfLog.Traceln("eBPF Probe removed")

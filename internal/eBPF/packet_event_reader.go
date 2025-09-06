@@ -1,0 +1,338 @@
+package ebpf_probe
+
+import (
+	"bytes"
+	"context"
+	"encoding/binary"
+	"fmt"
+	"net"
+	"sync"
+	"time"
+
+	"github.com/cilium/ebpf/perf"
+	"github.com/free5gc/go-upf/internal/logger"
+	"github.com/free5gc/go-upf/pkg/utils"
+)
+
+// PacketEvent represents a packet event from eBPF
+type PacketEvent struct {
+	TsNs     uint64 `json:"tsNs"`     // Timestamp (nanoseconds)
+	SaddrV4  uint32 `json:"saddrV4"`  // IPv4 source address
+	DaddrV4  uint32 `json:"daddrV4"`  // IPv4 destination address
+	Ifindex  uint32 `json:"ifindex"`  // Interface index
+	Sport    uint16 `json:"sport"`    // Source port
+	Dport    uint16 `json:"dport"`    // Destination port
+	Len      uint16 `json:"len"`      // Packet length (L3 or L4)
+	Dir      uint8  `json:"dir"`      // Direction: DIRECTION_UL/DIRECTION_DL
+	L4       uint8  `json:"l4"`       // L4 protocol: IPPROTO_TCP/UDP/ICMP
+	TcpFlags uint8  `json:"tcpFlags"` // TCP flags (0 for non-TCP)
+	DscpEcn  uint8  `json:"dscpEcn"`  // DSCP/ECN from IP header
+	TtlHl    uint8  `json:"ttlHl"`    // TTL/Hop Limit
+	L3Frag   uint8  `json:"l3Frag"`   // Fragment flags
+	Family   uint8  `json:"family"`   // Address family (4=IPv4, 6=IPv6)
+	Reserved uint8  `json:"reserved"` // Reserved for alignment
+}
+
+// FlowKey represents a unique flow identifier
+type FlowKey struct {
+	Family  uint8  `json:"family"`  // 4=IPv4, 6=IPv6
+	L4      uint8  `json:"l4"`      // L4 protocol
+	SrcIP   net.IP `json:"srcIP"`   // Source IP
+	DstIP   net.IP `json:"dstIP"`   // Destination IP
+	SrcPort uint16 `json:"srcPort"` // Source port
+	DstPort uint16 `json:"dstPort"` // Destination port
+}
+
+// String returns a string representation of FlowKey
+func (fk FlowKey) String() string {
+	return fmt.Sprintf("%s:%d->%s:%d(%d)", fk.SrcIP, fk.SrcPort, fk.DstIP, fk.DstPort, fk.L4)
+}
+
+// PacketInfo represents processed packet information
+type PacketInfo struct {
+	TS         utils.TimeStamp `json:"ts"`         // Timestamp
+	Length     uint16          `json:"length"`     // Packet length
+	Protocol   uint8           `json:"protocol"`   // L4 protocol
+	Direction  uint8           `json:"direction"`  // Direction (UL/DL)
+	TCPFlags   uint8           `json:"tcpFlags"`   // TCP flags
+	DSCP_ECN   uint8           `json:"dscpEcn"`    // DSCP/ECN
+	TTL        uint8           `json:"ttl"`        // TTL/Hop Limit
+	Fragmented bool            `json:"fragmented"` // Is fragmented
+}
+
+// FlowState represents the state of a flow with recent packets
+type FlowState struct {
+	FlowKey    FlowKey      `json:"flowKey"`    // Flow identifier
+	RecentPkts []PacketInfo `json:"recentPkts"` // Ring buffer of recent packets
+	Cnt        uint64       `json:"cnt"`        // Total packet count
+	Bytes      uint64       `json:"bytes"`      // Total bytes
+	FirstTime  time.Time    `json:"firstTime"`  // First packet time
+	LastTime   time.Time    `json:"lastTime"`   // Last packet time
+	K          int          `json:"k"`          // Current ring buffer size
+	ringHead   int          // Internal ring buffer head position
+	mu         sync.RWMutex // Mutex for thread safety
+}
+
+// PacketEventReader manages reading events from packet_events perf buffer
+type PacketEventReader struct {
+	probe      *EbpfProbe
+	perfReader *perf.Reader
+	flows      map[string]*FlowState // Map of flow states
+	maxFlows   int                   // Maximum number of flows to track
+	defaultK   int                   // Default K value for ring buffer
+	ctx        context.Context
+	cancel     context.CancelFunc
+	mu         sync.RWMutex
+	wg         sync.WaitGroup
+}
+
+// NewPacketEventReader creates a new packet event reader
+func NewPacketEventReader(probe *EbpfProbe, maxFlows, defaultK int) (*PacketEventReader, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	reader := &PacketEventReader{
+		probe:    probe,
+		flows:    make(map[string]*FlowState),
+		maxFlows: maxFlows,
+		defaultK: defaultK,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+
+	// Initialize perf reader
+	perfReader, err := perf.NewReader(probe.CounterObj.PacketEvents, 4096) // 4KB buffer per CPU
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create perf reader: %w", err)
+	}
+	reader.perfReader = perfReader
+
+	logger.EbpfLog.Infof("PacketEventReader initialized with maxFlows=%d, defaultK=%d", maxFlows, defaultK)
+	return reader, nil
+}
+
+// Start begins reading packet events
+func (r *PacketEventReader) Start() {
+	r.wg.Add(1)
+	go r.readEventLoop()
+	logger.EbpfLog.Info("PacketEventReader started")
+}
+
+// Stop stops reading packet events
+func (r *PacketEventReader) Stop() {
+	logger.EbpfLog.Info("Stopping PacketEventReader...")
+	r.cancel()
+	if r.perfReader != nil {
+		r.perfReader.Close()
+	}
+	r.wg.Wait()
+	logger.EbpfLog.Info("PacketEventReader stopped")
+}
+
+// readEventLoop is the main event reading loop
+func (r *PacketEventReader) readEventLoop() {
+	defer r.wg.Done()
+
+	for {
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
+			record, err := r.perfReader.Read()
+			if err != nil {
+				if err == perf.ErrClosed {
+					return
+				}
+				logger.EbpfLog.Errorf("Error reading perf event: %v", err)
+				continue
+			}
+
+			// Parse packet event
+			event, err := r.parsePacketEvent(record.RawSample)
+			if err != nil {
+				logger.EbpfLog.Errorf("Error parsing packet event: %v", err)
+				continue
+			}
+
+			// Process the event
+			r.processPacketEvent(event)
+		}
+	}
+}
+
+// parsePacketEvent parses raw perf event data into PacketEvent
+func (r *PacketEventReader) parsePacketEvent(data []byte) (*PacketEvent, error) {
+	if len(data) < 28 { // Size of PacketEvent structure
+		return nil, fmt.Errorf("invalid packet event size: %d", len(data))
+	}
+
+	event := &PacketEvent{}
+	buf := bytes.NewReader(data)
+
+	if err := binary.Read(buf, binary.LittleEndian, event); err != nil {
+		return nil, fmt.Errorf("failed to parse packet event: %w", err)
+	}
+
+	return event, nil
+}
+
+// processPacketEvent processes a single packet event
+func (r *PacketEventReader) processPacketEvent(event *PacketEvent) {
+	// Create flow key
+	flowKey := FlowKey{
+		Family:  event.Family,
+		L4:      event.L4,
+		SrcIP:   utils.Uint32ToIP(event.SaddrV4),
+		DstIP:   utils.Uint32ToIP(event.DaddrV4),
+		SrcPort: event.Sport,
+		DstPort: event.Dport,
+	}
+
+	// Create packet info
+	pktInfo := PacketInfo{
+		TS:         utils.FormatTimeStamp(event.TsNs),
+		Length:     event.Len,
+		Protocol:   event.L4,
+		Direction:  event.Dir,
+		TCPFlags:   event.TcpFlags,
+		DSCP_ECN:   event.DscpEcn,
+		TTL:        event.TtlHl,
+		Fragmented: event.L3Frag != 0,
+	}
+
+	// Update flow state
+	r.updateFlowState(flowKey, pktInfo)
+}
+
+// updateFlowState updates or creates flow state with new packet
+func (r *PacketEventReader) updateFlowState(flowKey FlowKey, pktInfo PacketInfo) {
+	keyStr := flowKey.String()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check if we need to do LRU eviction
+	if len(r.flows) >= r.maxFlows {
+		r.evictOldestFlow()
+	}
+
+	flow, exists := r.flows[keyStr]
+	if !exists {
+		// Create new flow
+		flow = &FlowState{
+			FlowKey:    flowKey,
+			RecentPkts: make([]PacketInfo, r.defaultK),
+			K:          r.defaultK,
+			FirstTime:  time.Unix(0, int64(pktInfo.TS.NanoSeconds)),
+			ringHead:   0,
+		}
+		r.flows[keyStr] = flow
+	}
+
+	flow.mu.Lock()
+	defer flow.mu.Unlock()
+
+	// Update statistics
+	flow.Cnt++
+	flow.Bytes += uint64(pktInfo.Length)
+	flow.LastTime = time.Unix(0, int64(pktInfo.TS.NanoSeconds))
+
+	// Add packet to ring buffer
+	flow.RecentPkts[flow.ringHead] = pktInfo
+	flow.ringHead = (flow.ringHead + 1) % flow.K
+}
+
+// evictOldestFlow removes the oldest flow (simple LRU)
+func (r *PacketEventReader) evictOldestFlow() {
+	var oldestKey string
+	var oldestTime time.Time
+	first := true
+
+	for key, flow := range r.flows {
+		flow.mu.RLock()
+		if first || flow.LastTime.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = flow.LastTime
+			first = false
+		}
+		flow.mu.RUnlock()
+	}
+
+	if oldestKey != "" {
+		delete(r.flows, oldestKey)
+		logger.EbpfLog.Debugf("Evicted oldest flow: %s", oldestKey)
+	}
+}
+
+// GetAllFlows returns all current flow states
+func (r *PacketEventReader) GetAllFlows() map[string]*FlowState {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Create a deep copy to avoid race conditions
+	result := make(map[string]*FlowState)
+	for key, flow := range r.flows {
+		flow.mu.RLock()
+		flowCopy := &FlowState{
+			FlowKey:   flow.FlowKey,
+			Cnt:       flow.Cnt,
+			Bytes:     flow.Bytes,
+			FirstTime: flow.FirstTime,
+			LastTime:  flow.LastTime,
+			K:         flow.K,
+		}
+
+		// Copy recent packets
+		flowCopy.RecentPkts = make([]PacketInfo, len(flow.RecentPkts))
+		copy(flowCopy.RecentPkts, flow.RecentPkts)
+
+		result[key] = flowCopy
+		flow.mu.RUnlock()
+	}
+
+	return result
+}
+
+// GetFlowByKey returns flow state for a specific flow key
+func (r *PacketEventReader) GetFlowByKey(flowKey FlowKey) *FlowState {
+	keyStr := flowKey.String()
+
+	r.mu.RLock()
+	flow, exists := r.flows[keyStr]
+	r.mu.RUnlock()
+
+	if !exists {
+		return nil
+	}
+
+	flow.mu.RLock()
+	defer flow.mu.RUnlock()
+
+	// Return a copy
+	flowCopy := &FlowState{
+		FlowKey:   flow.FlowKey,
+		Cnt:       flow.Cnt,
+		Bytes:     flow.Bytes,
+		FirstTime: flow.FirstTime,
+		LastTime:  flow.LastTime,
+		K:         flow.K,
+	}
+
+	flowCopy.RecentPkts = make([]PacketInfo, len(flow.RecentPkts))
+	copy(flowCopy.RecentPkts, flow.RecentPkts)
+
+	return flowCopy
+}
+
+// SetFlowK dynamically adjusts the K value for a specific flow (reserved for future expansion)
+func (r *PacketEventReader) SetFlowK(flowKey FlowKey, newK int) error {
+	// TODO: Implement dynamic K adjustment when needed
+	return fmt.Errorf("dynamic K adjustment not implemented yet")
+}
+
+// GetFlowCount returns the number of tracked flows
+func (r *PacketEventReader) GetFlowCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.flows)
+}

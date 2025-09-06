@@ -19,6 +19,10 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define MAX_MAP_ENTRIES 16
 
+// Ring buffer configuration
+#define RINGBUF_SIZE (8 * 1024 * 1024)  // 8MB, can be overridden from Go
+#define WAKE_UP_INTERVAL 16              // Wake up every N events to reduce overhead
+
 // Direction constants for flow processing
 #define DIRECTION_UL 1  // Uplink - need deep parsing (GTP tunneling)
 #define DIRECTION_DL 2  // Downlink - shallow parsing (outer IP only)
@@ -26,15 +30,55 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 // Global variable to track current processing direction
 static __u8 current_direction = 0;
 
-struct pkt_rec {
-    __u64 ts_ns;        // capture time (monotonic)
-    __u32 len;          // packet length
-    __u8  l4;           // L4 proto (e.g., IPPROTO_TCP/UDP)
-    __u8  dir;          // 0=unknown, 1=ingress, 2=egress (or UL/DL)
-    __u8  tcp_flags;    // for TCP only: SYN/ACK/FIN/RST bits
-    __u8  dscp_ecn;     // IPv4 TOS or IPv6 traffic class snapshot
+// ---- Global Ring Buffer Event Structure ----
+// Event structure for the global ring buffer (32-64 bytes, 8-byte aligned)
+struct pkt_event {
+    __u64 ts_ns;        // Timestamp (nanoseconds)
+    __u32 saddr_v4;     // IPv4 source address
+    __u32 daddr_v4;     // IPv4 destination address
+    __u32 ifindex;      // Interface index
+    __u16 sport;        // Source port
+    __u16 dport;        // Destination port
+    __u16 len;          // Packet length (L3 or L4)
+    __u8 dir;           // Direction: DIRECTION_UL/DIRECTION_DL
+    __u8 l4;            // L4 protocol: IPPROTO_TCP/UDP/ICMP
+    __u8 tcp_flags;     // TCP flags (0 for non-TCP)
+    __u8 dscp_ecn;      // DSCP/ECN from IP header
+    __u8 ttl_hl;        // TTL/Hop Limit
+    __u8 l3_frag;       // Fragment flags
+    __u8 family;        // Address family (4=IPv4, 6=IPv6)
+    __u8 reserved;      // Reserved for alignment
+    // Total: 28 bytes, 8-byte aligned
+} __attribute__((packed));
+
+// Per-CPU counter for wake-up control
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);
+} event_counter SEC(".maps");
+
+// Global event buffer using perf event array (compatible with older kernels)
+struct {
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __uint(max_entries, 0);  // Will be set to number of CPUs by Go loader
+    __type(key, __u32);
+    __type(value, __u32);
+} packet_events SEC(".maps");
+
+// Configuration map for sampling control
+struct sampling_config {
+    __u32 sample_rate;      // 1=all packets, 8=1/8 sampling, etc.
 };
- 
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, struct sampling_config);
+} sampling_control SEC(".maps");
+
 struct flow_key {
     __u8  family;     // 4: IPv4, 6: IPv6
     __u8  proto;      // IPPROTO_TCP/UDP/ICMP...
@@ -81,24 +125,7 @@ struct {
     __type(value, struct flow_stats);
 } flow_statistics SEC(".maps");
 
-// ---- Added: 16 recent packet ring for each flow ----
-#define RECENT_PKT_RING_SIZE 16
-#define RECENT_PKT_RING_MASK (RECENT_PKT_RING_SIZE - 1)
 
-struct pkt_ring {
-    // TODO: Remove spin lock to avoid requiring BTF support
-    // struct bpf_spin_lock lock;
-    __u32 head;                             // Incrementally increasing write count
-    __u32 count;                            // Number of valid entries filled (<=16)
-    struct pkt_rec recs[RECENT_PKT_RING_SIZE];
-};
-
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 131072);            // Same level as flow_statistics
-    __type(key,   struct flow_key);
-    __type(value, struct pkt_ring);
-} flow_recent_pkts SEC(".maps");
 
 // ---- LPM Trie for tracking UL source IPs ----
 struct {
@@ -108,6 +135,128 @@ struct {
     __type(key, struct ip_key);
     __type(value, struct ip_info);
 } ul_source_ips SEC(".maps");
+
+/**
+ * @brief Check if packet should be sampled based on sampling configuration
+ * 
+ * @param proto L4 protocol
+ * @return 1 if packet should be sampled, 0 otherwise
+ */
+static __always_inline int should_sample_packet(__u8 proto) {
+    __u32 key = 0;
+    struct sampling_config *config = bpf_map_lookup_elem(&sampling_control, &key);
+    
+    // Default to sample all if no config
+    if (!config) {
+        return 1;
+    }
+    
+    // Apply sample rate (simple modulo-based sampling)
+    if (config->sample_rate > 1) {
+        __u64 ts = bpf_ktime_get_ns();
+        if ((ts / 1000) % config->sample_rate != 0) {
+            return 0;  // Skip this packet
+        }
+    }
+    
+    return 1;  // Sample this packet
+}
+
+/**
+ * @brief Send packet event to global perf event array
+ * 
+ * @param ctx The context (XDP or TC)
+ * @param event Packet event to send
+ * @return 0 on success, negative on error
+ */
+static __always_inline int send_packet_event(void *ctx, struct pkt_event *event) {
+    __u32 cpu = bpf_get_smp_processor_id();
+    __u32 key = 0;
+    __u64 *counter;
+    
+    // Get per-CPU counter for wake-up control
+    counter = bpf_map_lookup_elem(&event_counter, &key);
+    if (!counter) {
+        // Initialize counter if not found
+        __u64 init_val = 1;
+        bpf_map_update_elem(&event_counter, &key, &init_val, BPF_ANY);
+        
+        // Send event with wakeup
+        return bpf_perf_event_output(ctx, &packet_events, BPF_F_CURRENT_CPU, 
+                                   event, sizeof(*event));
+    }
+    
+    // Increment counter
+    __u64 current_count = *counter + 1;
+    bpf_map_update_elem(&event_counter, &key, &current_count, BPF_ANY);
+    
+    // Determine if we should wake up userspace
+    __u64 flags = BPF_F_CURRENT_CPU;
+    if ((current_count % WAKE_UP_INTERVAL) == 0) {
+        // Force wakeup every WAKE_UP_INTERVAL events
+        flags |= 0;  // No special flags for wakeup
+        bpf_debug(DBG_PACKET, "Waking up userspace at event %llu\n", current_count);
+    } else {
+        // No wakeup for this event (reduce overhead)
+        flags |= BPF_F_CURRENT_CPU;
+    }
+    
+    // Send event to perf buffer
+    return bpf_perf_event_output(ctx, &packet_events, flags, 
+                               event, sizeof(*event));
+}
+
+/**
+ * @brief Create and send packet event for given flow
+ * This function extracts necessary fields and sends them to the global event buffer
+ * 
+ * @param ctx The context (XDP or TC)
+ * @param iph IP header
+ * @param proto L4 protocol
+ * @param sport Source port
+ * @param dport Destination port
+ * @param pkt_len Packet length
+ * @param tcp_flags TCP flags (0 for non-TCP)
+ * @return 0 on success, negative on error
+ */
+static __always_inline int create_and_send_event(void *ctx, struct iphdr *iph, __u8 proto, 
+                                                __u16 sport, __u16 dport, __u32 pkt_len,
+                                                __u8 tcp_flags) {
+    // Check sampling configuration first
+    if (!should_sample_packet(proto)) {
+        return 0;  // Skip this packet
+    }
+    
+    struct pkt_event event = {};
+    
+    // Fill event structure
+    event.ts_ns = bpf_ktime_get_ns();
+    event.saddr_v4 = iph->saddr;  // Already in network byte order
+    event.daddr_v4 = iph->daddr;  // Already in network byte order
+    event.ifindex = 0;  // Will be set by caller if needed
+    event.sport = sport;
+    event.dport = dport;
+    event.len = (__u16)pkt_len;
+    event.dir = current_direction;
+    event.l4 = proto;
+    event.tcp_flags = tcp_flags;
+    event.dscp_ecn = iph->tos;
+    event.ttl_hl = iph->ttl;
+    event.l3_frag = (iph->frag_off & bpf_htons(0x3FFF)) ? 1 : 0;  // Check if fragmented
+    event.family = 4;  // IPv4
+    event.reserved = 0;  // Initialize reserved field
+    
+    // Send event to global buffer
+    int ret = send_packet_event(ctx, &event);
+    if (ret < 0) {
+        bpf_debug(DBG_PACKET, "Failed to send packet event: %d\n", ret);
+        return ret;
+    }
+    
+    bpf_debug(DBG_PACKET, "Sent packet event: proto=%u, len=%u\n", 
+              proto, pkt_len);
+    return 0;
+}
 
 /**
  * @brief Check if an IP address exists in UL source IPs map
@@ -169,10 +318,7 @@ static __always_inline int record_ul_source_ip(struct iphdr *iph, __u32 pkt_len)
         
         int ret = bpf_map_update_elem(&ul_source_ips, &key, &new_info, BPF_ANY);
         if (ret == 0) {
-            __u32 ip_host = bpf_ntohl(iph->saddr);
-            bpf_debug(DBG_PACKET, "UL(XDP): New UL source IP recorded: %u.%u.%u", 
-                     (ip_host >> 24) & 0xFF, (ip_host >> 16) & 0xFF, (ip_host >> 8) & 0xFF);
-            bpf_debug(DBG_PACKET, "UL(XDP): New UL source IP recorded: %u\n", ip_host & 0xFF);
+            bpf_debug(DBG_PACKET, "UL(XDP): New UL source IP recorded\n");
         } else {
             bpf_debug(DBG_PACKET, "UL(XDP): Failed to add UL source IP: ret=%d\n", ret);
         }
@@ -181,72 +327,25 @@ static __always_inline int record_ul_source_ip(struct iphdr *iph, __u32 pkt_len)
     return 0;
 }
 
-/**
- * @brief Push a packet record into the ring buffer for a specific flow
- * 
- * @param key Flow key identifying the specific flow
- * @param pkt_rec Packet record to be added to the ring buffer
- * @return 0 on success, negative value on error
- */
-static __always_inline int ring_push(struct flow_key *key, struct pkt_rec *rec) {
-    struct pkt_ring *ring;
-    struct pkt_ring new_ring = {};
-    
-    // Initialize new ring values
-    new_ring.head = 0;
-    new_ring.count = 0;
-    
-    // Try to look up existing ring
-    ring = bpf_map_lookup_elem(&flow_recent_pkts, key);
-    if (ring) {
-        // TODO: No longer need lock operations
-        // bpf_spin_lock(&ring->lock);
-        
-        // Calculate the position to write the new record
-        __u32 pos = ring->head & RECENT_PKT_RING_MASK;
-        
-        // Copy the record into the ring
-        ring->recs[pos] = *rec;
-        
-        // Increment head for next write
-        ring->head++;
-        
-        // Update count (cap at RECENT_PKT_RING_SIZE)
-        if (ring->count < RECENT_PKT_RING_SIZE) {
-            ring->count++;
-        }
-        
-        // TODO: No longer need unlock operations
-        // bpf_spin_unlock(&ring->lock);
-        
-        bpf_debug(DBG_PACKET, "UL(XDP): Updated packet ring: pos=%u, count=%u\n", pos, ring->count);
-    } else {
-        // Create a new ring with the first packet
-        new_ring.head = 1;  // First entry at position 0
-        new_ring.count = 1;
-        new_ring.recs[0] = *rec;  // Copy the record into the first position
-        
-        // Add the new ring to the map
-        bpf_map_update_elem(&flow_recent_pkts, key, &new_ring, BPF_ANY);
-        bpf_debug(DBG_PACKET, "UL(XDP): Created new packet ring for flow\n");
-    }
-    
-    return 0;
-}
+
 
 /**
- * @brief Record flow information to the LRU hash map
- * This function extracts the 5-tuple (src/dst IP, src/dst port, protocol) from the packet
- * and updates the flow statistics in the map.
+ * @brief Record flow information and send packet event to global buffer
+ * This function extracts the 5-tuple (src/dst IP, src/dst port, protocol) from the packet,
+ * updates the flow statistics, and sends an event to the global buffer.
  * 
+ * @param ctx The context (XDP or TC)
  * @param iph IP header
  * @param proto Protocol (TCP/UDP)
  * @param sport Source port
  * @param dport Destination port
  * @param pkt_len Packet length in bytes
+ * @param tcp_flags TCP flags (0 for non-TCP)
  * @return 0 on success, negative value on error
  */
-static __always_inline int record_flow(struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, __u32 pkt_len) {
+static __always_inline int record_flow_and_send_event(void *ctx, struct iphdr *iph, __u8 proto, 
+                                                    __u16 sport, __u16 dport, __u32 pkt_len,
+                                                    __u8 tcp_flags) {
     struct flow_key key = {};
     struct flow_stats *stats, new_stats = {};
     __u64 ts = bpf_ktime_get_ns();
@@ -267,7 +366,7 @@ static __always_inline int record_flow(struct iphdr *iph, __u8 proto, __u16 spor
         stats->packets++;
         stats->bytes += pkt_len;
         stats->last_ts_ns = ts;
-        bpf_debug(DBG_PACKET, "UL(XDP): Updated flow: proto=%u, packets=%llu, bytes=%llu\n", 
+        bpf_debug(DBG_PACKET, "Updated flow: proto=%u, packets=%llu, bytes=%llu\n", 
                   proto, stats->packets, stats->bytes);
     } else {
         // Create new stats
@@ -276,33 +375,24 @@ static __always_inline int record_flow(struct iphdr *iph, __u8 proto, __u16 spor
         new_stats.first_ts_ns = ts;
         new_stats.last_ts_ns = ts;
         bpf_map_update_elem(&flow_statistics, &key, &new_stats, BPF_ANY);
-        bpf_debug(DBG_PACKET, "UL(XDP): New flow: proto=%u\n", proto);
-        bpf_debug(DBG_PACKET, "UL(XDP): New flow SRC: %u.%u.%u\n",
-                 (bpf_ntohl(iph->saddr) >> 24) & 0xFF, (bpf_ntohl(iph->saddr) >> 16) & 0xFF,
-                 (bpf_ntohl(iph->saddr) >> 8) & 0xFF);
-        bpf_debug(DBG_PACKET, "UL(XDP): New flow SRC: %u:%u\n", 
-                 bpf_ntohl(iph->saddr) & 0xFF, bpf_ntohs(sport));
-        bpf_debug(DBG_PACKET, "UL(XDP): New flow DST: %u.%u.%u\n",
-                 (bpf_ntohl(iph->daddr) >> 24) & 0xFF, (bpf_ntohl(iph->daddr) >> 16) & 0xFF,
-                 (bpf_ntohl(iph->daddr) >> 8) & 0xFF);
-        bpf_debug(DBG_PACKET, "UL(XDP): New flow DST: %u:%u\n", 
-                 bpf_ntohl(iph->daddr) & 0xFF, bpf_ntohs(dport));
+        bpf_debug(DBG_PACKET, "New flow: proto=%u\n", proto);
     }
     
-    // Create a packet record for the ring buffer using global direction
-    struct pkt_rec pkt_record = {};
-    pkt_record.ts_ns = ts;
-    pkt_record.len = pkt_len;
-    pkt_record.l4 = proto;
-    pkt_record.dir = current_direction;  // Use global direction
-    pkt_record.tcp_flags = 0;
-    pkt_record.dscp_ecn = (iph->tos & 0xFF);
-    
-    // Push the packet record into the ring buffer for this flow
-    bpf_debug(DBG_PACKET, "UL(XDP): Recording flow packet to ring buffer\n");
-    ring_push(&key, &pkt_record);
+    // Send packet event to global buffer (instead of per-flow ring buffer)
+    int ret = create_and_send_event(ctx, iph, proto, sport, dport, pkt_len, tcp_flags);
+    if (ret < 0) {
+        bpf_debug(DBG_PACKET, "Failed to send packet event: %d\n", ret);
+        // Continue even if event sending fails - don't break flow tracking
+    } else {
+        bpf_debug(DBG_PACKET, "Sent packet event to global buffer\n");
+    }
     
     return 0;
+}
+
+// Legacy wrapper function for backward compatibility
+static __always_inline int record_flow(void *ctx, struct iphdr *iph, __u8 proto, __u16 sport, __u16 dport, __u32 pkt_len) {
+    return record_flow_and_send_event(ctx, iph, proto, sport, dport, pkt_len, 0);
 }
 
 static __always_inline __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr *iph){
@@ -322,11 +412,6 @@ static __always_inline __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr 
     __u32 ip_src = bpf_ntohl(iph->saddr);
     __u32 ip_dest = bpf_ntohl(iph->daddr);
 
-    bpf_debug(DBG_PACKET, "UL(XDP): inner IPv4 src: %u.%u.%u", (ip_src >> 24) & 0xFF, (ip_src >> 16) & 0xFF, (ip_src >> 8) & 0xFF);
-    bpf_debug(DBG_PACKET, "UL(XDP): inner IPv4 src: %u", ip_src & 0xFF);
-    bpf_debug(DBG_PACKET, "UL(XDP): inner IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
-    bpf_debug(DBG_PACKET, "UL(XDP): inner IPv4 dst: %u", ip_dest & 0xFF);
-
     // Record UL source IP in LPM trie (this is inner IP, so it's the real user IP)
     __u32 pkt_len = p_data_end - p_data;
     record_ul_source_ip(iph, pkt_len);
@@ -345,7 +430,7 @@ static __always_inline __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr 
             __u32 pkt_len = p_data_end - p_data;
             
             // Record flow statistics (works for both UDP and TCP) - inner flow is always UL
-            record_flow(iph, iph->protocol, src_port, dst_port, pkt_len);
+            record_flow(ctx, iph, iph->protocol, src_port, dst_port, pkt_len);
             
             // Log info about the flow (protocol type is already in the record_flow debug output)
             bpf_debug(DBG_PACKET, "UL(XDP): Recorded inner %s flow for ports: %u -> %u\n", 
@@ -370,7 +455,7 @@ static __always_inline __u32 inner_ipv4_handle(struct xdp_md *ctx, struct iphdr 
             __u16 type = icmp->type;
             __u16 code = icmp->code;
             
-            record_flow(iph, IPPROTO_ICMP, type, code, pkt_len);
+            record_flow(ctx, iph, IPPROTO_ICMP, type, code, pkt_len);
             bpf_debug(DBG_PACKET, "UL(XDP): Recorded inner ICMP flow: type=%u, code=%u\n", type, code);
         }
     } 
@@ -445,7 +530,6 @@ static __always_inline __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph, 
     }
     __u32 ip_src = bpf_ntohl(iph->saddr);
     __u32 ip_dest = bpf_ntohl(iph->daddr);
-
     bpf_debug(DBG_PACKET, "UL(XDP): IPv4 src: %u.%u.%u", (ip_src >> 24) & 0xFF, (ip_src >> 16) & 0xFF, (ip_src >> 8) & 0xFF);
     bpf_debug(DBG_PACKET, "UL(XDP): IPv4 src: %u", ip_src & 0xFF);
     bpf_debug(DBG_PACKET, "UL(XDP): IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
@@ -460,7 +544,7 @@ static __always_inline __u32 ipv4_handle(struct xdp_md *ctx, struct iphdr *iph, 
         if (is_ul_source_ip(iph->daddr)) {
             bpf_debug(DBG_PACKET, "DL(TC): DL traffic: dest IP found in UL sources, recording outer flow\n");
             // For DL outer flow, use port 0 since we don't parse L4 headers
-            record_flow(iph, iph->protocol, 0, 0, pkt_len);
+            record_flow(ctx, iph, iph->protocol, 0, 0, pkt_len);
         } else {
             bpf_debug(DBG_PACKET, "DL(TC): DL traffic: dest IP (%u.%u.%u", 
                       (bpf_ntohl(iph->daddr) >> 24) & 0xFF, (bpf_ntohl(iph->daddr) >> 16) & 0xFF, (bpf_ntohl(iph->daddr) >> 8) & 0xFF);
@@ -511,7 +595,6 @@ static __always_inline __u32 tc_ipv4_handle(struct __sk_buff *skb, struct iphdr 
     
     __u32 ip_src = bpf_ntohl(iph->saddr);
     __u32 ip_dest = bpf_ntohl(iph->daddr);
-
     bpf_debug(DBG_PACKET, "DL(TC): IPv4 src: %u.%u.%u", (ip_src >> 24) & 0xFF, (ip_src >> 16) & 0xFF, (ip_src >> 8) & 0xFF);
     bpf_debug(DBG_PACKET, "DL(TC): IPv4 src: %u", ip_src & 0xFF);
     bpf_debug(DBG_PACKET, "DL(TC): IPv4 dst: %u.%u.%u", (ip_dest >> 24) & 0xFF, (ip_dest >> 16) & 0xFF, (ip_dest >> 8) & 0xFF);
@@ -525,7 +608,7 @@ static __always_inline __u32 tc_ipv4_handle(struct __sk_buff *skb, struct iphdr 
     if (is_ul_source_ip(iph->daddr)) {
         bpf_debug(DBG_PACKET, "DL(TC): dest IP found in UL sources, recording outer flow\n");
         // For DL outer flow, use port 0 since we don't parse L4 headers in DL
-        record_flow(iph, iph->protocol, 0, 0, pkt_len);
+        record_flow(skb, iph, iph->protocol, 0, 0, pkt_len);
     } else {
         bpf_debug(DBG_PACKET, "DL(TC): dest IP (%u.%u.%u", 
                   (bpf_ntohl(iph->daddr) >> 24) & 0xFF, (bpf_ntohl(iph->daddr) >> 16) & 0xFF, (bpf_ntohl(iph->daddr) >> 8) & 0xFF);
