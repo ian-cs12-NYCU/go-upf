@@ -371,5 +371,3 @@ func (s *Server) HandleGetPerfBufferLostSamples(c *gin.Context) {
 		"perCPULostSamples": perCPULost,
 	})
 }
-
-

@@ -174,5 +174,3 @@ func (e *EbpfProbe) GetPerCPULostSamples() (map[int]uint64, error) {
 	}
 	return e.PacketEventReader.GetPerCPULostSamples(), nil
 }
-
-

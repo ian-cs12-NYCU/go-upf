@@ -17,6 +17,16 @@ This document describes the refactored UPF eBPF flow analytics API architecture.
 [GIN-debug] GET    /nwdaf-oam/source-ips/top --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamTopSourceIPsGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/source-ips/stats --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamSourceIPsStatsGet-fm (3 handlers)
 [GIN-debug] DELETE /nwdaf-oam/source-ips     --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamSourceIPsClear-fm (3 handlers)
+[GIN-debug] GET    /nwdaf-oam/sampling-config --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamSamplingConfigGet-fm (3 handlers)
+[GIN-debug] PUT    /nwdaf-oam/sampling-config --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamSamplingConfigUpdate-fm (3 handlers)
+[GIN-debug] PUT    /nwdaf-oam/sampling-config/:rate --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamSamplingConfigUpdateByParam-fm (3 handlers)
+[GIN-debug] GET    /nwdaf-oam/defaultK       --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleGetGlobalDefaultK-fm (3 handlers)
+[GIN-debug] PUT    /nwdaf-oam/defaultK       --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleSetGlobalDefaultK-fm (3 handlers)
+[GIN-debug] GET    /nwdaf-oam/perf-buffer-config --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleGetPerfBufferConfig-fm (3 handlers)
+[GIN-debug] GET    /nwdaf-oam/perf-buffer-stats --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleGetPerfBufferStats-fm (3 handlers)
+[GIN-debug] GET    /nwdaf-oam/perf-buffer-lost-samples --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleGetPerfBufferLostSamples-fm (3 handlers)
+[GIN-debug] GET    /nwdaf-oam/flows/:srcIP/:srcPort/:dstIP/:dstPort/:protocol/k --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleGetFlowK-fm (3 handlers)
+[GIN-debug] PUT    /nwdaf-oam/flows/:srcIP/:srcPort/:dstIP/:dstPort/:protocol/k --> github.com/free5gc/go-upf/internal/sbi.(*Server).HandleSetFlowK-fm (3 handlers)
 ```
 
 ## Architecture Overview
@@ -70,77 +80,277 @@ Provide total number of tracked flows for resource monitoring and system health 
 ```bash
 curl http://localhost:8080/nwdaf-oam/flows/statistics
 ```
-**Purpose**: Quick overview of all active flows
-**Response**: Array of flow statistics without packet details
+**Purpose**: Quick overview of all active flows  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
+**Response Example**:
+```json
+{
+  "count": 2,
+  "flowStatistics": [
+    {
+      "srcIP": "10.60.0.1",
+      "dstIP": "1.1.1.1",
+      "srcPort": 2048,
+      "dstPort": 0,
+      "cnt": 4,
+      "bytes": 568,
+      "firstTime": {
+        "ns": 1584931831473940,
+        "formatted": "2025-09-25T08:15:31.831Z"
+      },
+      "lastTime": {
+        "ns": 1584934840816072,
+        "formatted": "2025-09-25T08:15:34.84Z"
+      }
+    },
+    {
+      "srcIP": "1.1.1.1",
+      "dstIP": "10.60.0.1",
+      "srcPort": 0,
+      "dstPort": 0,
+      "cnt": 4,
+      "bytes": 336,
+      "firstTime": {
+        "ns": 1584931836195449,
+        "formatted": "2025-09-25T08:15:31.836Z"
+      },
+      "lastTime": {
+        "ns": 1584934846003434,
+        "formatted": "2025-09-25T08:15:34.846Z"
+      }
+    }
+  ]
+}
+```
 
 ### 2. Get Specific Flow Packet Records
+
 ```bash
 curl http://localhost:8080/nwdaf-oam/flows/packet-records/192.168.1.1/192.168.1.100/80/8080
 ```
-**Purpose**: Detailed packet analysis for troubleshooting
+
+**Purpose**: Detailed packet analysis for troubleshooting  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
 **Response**: Recent packet records for the specified flow
 
-### 3. Get Total Flow Count
+### 3. Get All Packet Records
+
+```bash
+curl http://localhost:8080/nwdaf-oam/flows/packet-records
+```
+
+**Purpose**: Detailed packet analysis for all flows  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
+**Response Example**:
+
+```json
+{
+  "count": 2,
+  "packetRecords": [
+    {
+      "srcIP": "10.60.0.1",
+      "dstIP": "1.1.1.1",
+      "srcPort": 8,
+      "dstPort": 0,
+      "recentPkts": [
+        {
+          "timestamp": {
+            "ns": 1584932832288186,
+            "formatted": "2025-09-25T08:15:32.832Z"
+          },
+          "length": 142,
+          "protocol": 1,
+          "direction": 1,
+          "tcpFlags": 0,
+          "dscpEcn": 0
+        },
+        {
+          "timestamp": {
+            "ns": 1584934840818709,
+            "formatted": "2025-09-25T08:15:34.84Z"
+          },
+          "length": 142,
+          "protocol": 1,
+          "direction": 1,
+          "tcpFlags": 0,
+          "dscpEcn": 0
+        },
+        {
+          "timestamp": {
+            "ns": 0,
+            "formatted": ""
+          },
+          "length": 0,
+          "protocol": 0,
+          "direction": 0,
+          "tcpFlags": 0,
+          "dscpEcn": 0
+        }
+      ]
+    },
+    {
+      "srcIP": "1.1.1.1",
+      "dstIP": "10.60.0.1",
+      "srcPort": 0,
+      "dstPort": 0,
+      "recentPkts": [
+        {
+          "timestamp": {
+            "ns": 1584932837860572,
+            "formatted": "2025-09-25T08:15:32.837Z"
+          },
+          "length": 84,
+          "protocol": 1,
+          "direction": 2,
+          "tcpFlags": 0,
+          "dscpEcn": 0
+        },
+        {
+          "timestamp": {
+            "ns": 1584934846005196,
+            "formatted": "2025-09-25T08:15:34.846Z"
+          },
+          "length": 84,
+          "protocol": 1,
+          "direction": 2,
+          "tcpFlags": 0,
+          "dscpEcn": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 4. Get Total Flow Count
 ```bash
 curl http://localhost:8080/nwdaf-oam/flows/count
 ```
-**Purpose**: Monitor system load and resource usage
-**Response**: Simple count of active flows
+**Purpose**: Monitor system load and resource usage  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
+**Response Example**:
 
-### 4. Get Combined Data (Backward Compatible)
+```json
+{
+  "flowCount": 2
+}
+```
+
+### 5. Get Combined Data (Backward Compatible)
+
 ```bash
 curl http://localhost:8080/nwdaf-oam/packets-count
 ```
-**Purpose**: Full flow information for comprehensive analysis
+
+**Purpose**: Full flow information for comprehensive analysis  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
 **Response**: Complete flow data with statistics and packet records
 
-## Architecture Benefits
+### 6. Get All Source IPs
 
-1. **Modular Design**: Each API focuses on specific functionality
-2. **Performance Optimization**: Retrieve only required data based on use case
-3. **Flexibility**: Support for both specific flow queries and bulk operations
-4. **Backward Compatibility**: Preserve existing combined API
-5. **Error Isolation**: Better error handling and isolation
-6. **Maintainability**: Cleaner code structure, easier to maintain and extend
-7. **Scalability**: More efficient resource usage for different monitoring scenarios
-
-## File Structure
-
-```
-internal/eBPF/
-├── flow_statistics.go    # Flow statistics APIs
-├── packet_records.go     # Packet records APIs  
-├── gtpu_counter.go      # Combined data API (refactored)
-└── ebpf.go              # Core eBPF structures
-
-internal/sbi/
-├── api_nwdafoam.go      # HTTP API routes and handlers
-└── processor/
-    └── flowAnalytics.go # API business logic processors
-
-pkg/utils/
-└── utils.go             # Utility functions
+```bash
+curl http://localhost:8080/nwdaf-oam/source-ips
 ```
 
-## Data Structures
+**Purpose**: Retrieve all tracked source IP addresses with statistics  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
+**Response Example**:
 
-### [FlowStatistics](#flowstatistics-structure)
-Basic flow statistics without packet details
+```json
+{
+  "count": 1,
+  "source_ips": [
+    {
+      "ip": "10.60.0.1",
+      "first_seen": {
+        "ns": 1584931831468926,
+        "formatted": "2025-09-25T08:15:31.831Z"
+      },
+      "last_seen": {
+        "ns": 1584934840814597,
+        "formatted": "2025-09-25T08:15:34.84Z"
+      },
+      "packet_count": 4,
+      "byte_count": 568,
+      "duration": 3009345671
+    }
+  ]
+}
+```
 
-### [FlowPacketRecords](#flowpacketrecords-structure)
-Packet records from ring buffer
+### 7. Get Top Source IPs
 
-### [Flows](#flows-structure)
-Combined flow data (statistics + packet records)
+```bash
+curl http://localhost:8080/nwdaf-oam/source-ips/top
+```
 
-### [PacketRecord](#packetrecord-structure)
-Individual packet information
+**Purpose**: Retrieve top source IPs by traffic volume  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
+**Response Example**:
 
----
+```json
+{
+  "count": 1,
+  "limit": 10,
+  "source_ips": [
+    {
+      "ip": "10.60.0.1",
+      "first_seen": {
+        "ns": 1584931831468926,
+        "formatted": "2025-09-25T08:15:31.831Z"
+      },
+      "last_seen": {
+        "ns": 1584934840814597,
+        "formatted": "2025-09-25T08:15:34.84Z"
+      },
+      "packet_count": 4,
+      "byte_count": 568,
+      "duration": 3009345671
+    }
+  ]
+}
+```
+
+### 8. Get Source IPs Statistics
+
+```bash
+curl http://localhost:8080/nwdaf-oam/source-ips/stats
+```
+
+**Purpose**: Retrieve aggregated statistics for all source IPs  
+**Status Code**: 200  
+**Content-Type**: application/json; charset=utf-8  
+**Response Example**:
+
+```json
+{
+  "stats": {
+    "avg_bytes": 568,
+    "avg_packets": 4,
+    "max_bytes": 568,
+    "max_packets": 4,
+    "min_bytes": 568,
+    "min_packets": 4,
+    "total_bytes": 568,
+    "total_ips": 1,
+    "total_packets": 4
+  }
+}
+```
+
+
 
 ## Data Structure Definitions
 
 ### FlowStatistics Structure
+
 ```go
 type FlowStatistics struct {
     SrcIP   net.IP          `json:"srcIP"`     // Source IP address
@@ -153,6 +363,10 @@ type FlowStatistics struct {
     LastTS  utils.TimeStamp `json:"lastTime"`  // Last packet timestamp
 }
 ```
+
+### FlowPacketRecords Structure
+
+```go
 
 ### FlowPacketRecords Structure
 ```go
@@ -176,7 +390,29 @@ type Flows struct {
     Bytes      uint64          `json:"bytes"`      // Total traffic in bytes
     FirstTS    utils.TimeStamp `json:"firstTime"`  // First packet timestamp
     LastTS     utils.TimeStamp `json:"lastTime"`   // Last packet timestamp
+    RecentPkts []PacketRecord `json:"recentPkts"` // Recent packet records from ring buffer
+}
+```
+
+### Flows Structure
+
+```go
+type Flows struct {
+    SrcIP      net.IP          `json:"srcIP"`      // Source IP address
+    DstIP      net.IP          `json:"dstIP"`      // Destination IP address
+    SrcPort    uint16          `json:"srcPort"`    // Source port
+    DstPort    uint16          `json:"dstPort"`    // Destination port
+    Cnt        int             `json:"cnt"`        // Packet count
+    Bytes      uint64          `json:"bytes"`      // Total traffic in bytes
+    FirstTS    utils.TimeStamp `json:"firstTime"`  // First packet timestamp
+    LastTS     utils.TimeStamp `json:"lastTime"`   // Last packet timestamp
     RecentPkts []PacketRecord  `json:"recentPkts"` // Recent packet records from ring buffer
+}
+```
+
+### PacketRecord Structure
+
+```go
 }
 ```
 

@@ -75,11 +75,11 @@ type FlowState struct {
 
 // PerfBufferStats represents perf buffer statistics
 type PerfBufferStats struct {
-	TotalLostSamples   uint64            `json:"totalLostSamples"`   // Total lost samples across all CPUs
-	PerCPULostSamples  map[int]uint64    `json:"perCPULostSamples"`  // Lost samples per CPU
-	TotalSamples       uint64            `json:"totalSamples"`       // Total processed samples
-	LostSampleRate     float64           `json:"lostSampleRate"`     // Lost sample rate (lost/total)
-	LastLostTimestamp  time.Time         `json:"lastLostTimestamp"`  // Timestamp of last lost event
+	TotalLostSamples  uint64         `json:"totalLostSamples"`  // Total lost samples across all CPUs
+	PerCPULostSamples map[int]uint64 `json:"perCPULostSamples"` // Lost samples per CPU
+	TotalSamples      uint64         `json:"totalSamples"`      // Total processed samples
+	LostSampleRate    float64        `json:"lostSampleRate"`    // Lost sample rate (lost/total)
+	LastLostTimestamp time.Time      `json:"lastLostTimestamp"` // Timestamp of last lost event
 }
 
 // PacketEventReader manages reading events from packet_events perf buffer
@@ -94,13 +94,13 @@ type PacketEventReader struct {
 	cancel         context.CancelFunc
 	mu             sync.RWMutex
 	wg             sync.WaitGroup
-	
+
 	// LOST samples statistics
-	totalLostSamples   uint64            // Total lost samples across all CPUs
-	perCPULostSamples  map[int]uint64    // Lost samples per CPU
-	totalSamples       uint64            // Total processed samples
-	lastLostTimestamp  time.Time         // Timestamp of last lost event
-	lostSamplesMu      sync.RWMutex      // Mutex for lost samples statistics
+	totalLostSamples  uint64         // Total lost samples across all CPUs
+	perCPULostSamples map[int]uint64 // Lost samples per CPU
+	totalSamples      uint64         // Total processed samples
+	lastLostTimestamp time.Time      // Timestamp of last lost event
+	lostSamplesMu     sync.RWMutex   // Mutex for lost samples statistics
 }
 
 // NewPacketEventReader creates a new packet event reader
@@ -650,5 +650,3 @@ func (r *PacketEventReader) GetPerCPULostSamples() map[int]uint64 {
 	}
 	return result
 }
-
-
