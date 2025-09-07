@@ -5,7 +5,6 @@ This document describes the refactored UPF eBPF flow analytics API architecture.
 ```
 [GIN-debug] GET    /nwdaf-oam/               --> github.com/free5gc/go-upf/internal/sbi.(*Server).getNwdafOamRoutes.func1 (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/nf-resource    --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamNfResourceGet-fm (3 handlers)
-[GIN-debug] GET    /nwdaf-oam/packets-count  --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamPacketsCountGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/flows/statistics --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamFlowStatisticsGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/flows/statistics/:srcIP/:dstIP/:srcPort/:dstPort --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamFlowStatisticsByKeyGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/flows/packet-records --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamPacketRecordsGet-fm (3 handlers)
@@ -48,12 +47,7 @@ Retrieve basic flow statistics without packet records for lightweight monitoring
 
 Extract detailed packet records from ring buffer for deep packet inspection. Returns recent packet details including length, protocol, direction, TCP flags, and DSCP/ECN values.
 
-### 3. Combined Flow Data API
-**GET** `/nwdaf-oam/packets-count`
-
-Provide comprehensive flow information combining statistics and packet records (backward compatible). Returns complete flow information including both statistics and recent packet records.
-
-### 4. Flow Count API
+### 3. Flow Count API
 **GET** `/nwdaf-oam/flows/count`
 
 Provide total number of tracked flows for resource monitoring and system health checks.
@@ -67,9 +61,6 @@ Provide total number of tracked flows for resource monitoring and system health 
 ### Packet Records Endpoints
 - `GET /nwdaf-oam/flows/packet-records` - Retrieve packet records for all flows
 - `GET /nwdaf-oam/flows/packet-records/{srcIP}/{dstIP}/{srcPort}/{dstPort}` - Retrieve packet records for specific flow
-
-### Combined Data Endpoints
-- `GET /nwdaf-oam/packets-count` - Retrieve combined flow data (legacy API)
 
 ### Utility Endpoints
 - `GET /nwdaf-oam/flows/count` - Get total flow count
@@ -240,18 +231,7 @@ curl http://localhost:8080/nwdaf-oam/flows/count
 }
 ```
 
-### 5. Get Combined Data (Backward Compatible)
-
-```bash
-curl http://localhost:8080/nwdaf-oam/packets-count
-```
-
-**Purpose**: Full flow information for comprehensive analysis  
-**Status Code**: 200  
-**Content-Type**: application/json; charset=utf-8  
-**Response**: Complete flow data with statistics and packet records
-
-### 6. Get All Source IPs
+### 5. Get All Source IPs
 
 ```bash
 curl http://localhost:8080/nwdaf-oam/source-ips
@@ -284,7 +264,7 @@ curl http://localhost:8080/nwdaf-oam/source-ips
 }
 ```
 
-### 7. Get Top Source IPs
+### 6. Get Top Source IPs
 
 ```bash
 curl http://localhost:8080/nwdaf-oam/source-ips/top
@@ -318,7 +298,7 @@ curl http://localhost:8080/nwdaf-oam/source-ips/top
 }
 ```
 
-### 8. Get Source IPs Statistics
+### 7. Get Source IPs Statistics
 
 ```bash
 curl http://localhost:8080/nwdaf-oam/source-ips/stats
@@ -379,44 +359,8 @@ type FlowPacketRecords struct {
 }
 ```
 
-### Flows Structure
-```go
-type Flows struct {
-    SrcIP      net.IP          `json:"srcIP"`      // Source IP address
-    DstIP      net.IP          `json:"dstIP"`      // Destination IP address
-    SrcPort    uint16          `json:"srcPort"`    // Source port
-    DstPort    uint16          `json:"dstPort"`    // Destination port
-    Cnt        int             `json:"cnt"`        // Packet count
-    Bytes      uint64          `json:"bytes"`      // Total traffic in bytes
-    FirstTS    utils.TimeStamp `json:"firstTime"`  // First packet timestamp
-    LastTS     utils.TimeStamp `json:"lastTime"`   // Last packet timestamp
-    RecentPkts []PacketRecord `json:"recentPkts"` // Recent packet records from ring buffer
-}
-```
-
-### Flows Structure
-
-```go
-type Flows struct {
-    SrcIP      net.IP          `json:"srcIP"`      // Source IP address
-    DstIP      net.IP          `json:"dstIP"`      // Destination IP address
-    SrcPort    uint16          `json:"srcPort"`    // Source port
-    DstPort    uint16          `json:"dstPort"`    // Destination port
-    Cnt        int             `json:"cnt"`        // Packet count
-    Bytes      uint64          `json:"bytes"`      // Total traffic in bytes
-    FirstTS    utils.TimeStamp `json:"firstTime"`  // First packet timestamp
-    LastTS     utils.TimeStamp `json:"lastTime"`   // Last packet timestamp
-    RecentPkts []PacketRecord  `json:"recentPkts"` // Recent packet records from ring buffer
-}
-```
-
 ### PacketRecord Structure
 
-```go
-}
-```
-
-### PacketRecord Structure
 ```go
 type PacketRecord struct {
     TS        utils.TimeStamp `json:"timestamp"` // Packet timestamp with multiple formats
@@ -436,4 +380,4 @@ type TimeStamp struct {
 }
 ```
 
-This refactored architecture provides better API design, allowing users to choose appropriate APIs based on their needs while maintaining backward compatibility.
+This refactored architecture provides better API design, allowing users to choose appropriate APIs based on their specific monitoring and analysis needs.

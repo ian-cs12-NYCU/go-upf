@@ -123,15 +123,6 @@ def test_flow_count():
     except Exception as e:
         print(f"❌ Error: {e}")
 
-def test_packets_count():
-    """Test GET /nwdaf-oam/packets-count - Combined flow data (legacy API)"""
-    url = f"{BASE_URL}/packets-count"
-    try:
-        response = requests.get(url, timeout=10)
-        print_response(response, "Packets Count (Combined Flow Data)")
-    except Exception as e:
-        print(f"❌ Error: {e}")
-
 def test_source_ips_all():
     """Test GET /nwdaf-oam/source-ips - Get all source IPs"""
     url = f"{BASE_URL}/source-ips"
@@ -1184,14 +1175,13 @@ def continuous_monitoring():
     print("Available APIs for monitoring:")
     print("1. Flow Statistics (All)")
     print("2. Flow Count")
-    print("3. Packets Count (Combined)")
-    print("4. Source IPs Count")
-    print("5. Source IPs Stats")
-    print("6. Sampling Configuration")
-    print("7. K Configuration")
-    print("8. Perf Buffer Statistics")
+    print("3. Source IPs Count")
+    print("4. Source IPs Stats")
+    print("5. Sampling Configuration")
+    print("6. K Configuration")
+    print("7. Perf Buffer Statistics")
     
-    choice = input("\nSelect API to monitor (1-8): ").strip()
+    choice = input("\nSelect API to monitor (1-7): ").strip()
     interval = input("Monitoring interval in seconds (default: 5): ").strip()
     
     try:
@@ -1202,25 +1192,24 @@ def continuous_monitoring():
     api_map = {
         '1': (f"{BASE_URL}/flows/statistics", "Flow Statistics"),
         '2': (f"{BASE_URL}/flows/count", "Flow Count"),
-        '3': (f"{BASE_URL}/packets-count", "Packets Count"),
-        '4': (f"{BASE_URL}/source-ips/count", "Source IPs Count"),
-        '5': (f"{BASE_URL}/source-ips/stats", "Source IPs Stats"),
-        '6': (f"{BASE_URL}/sampling-config", "Sampling Configuration"),
-        '7': (f"{BASE_URL}/defaultK", "K Configuration"),
-        '8': (f"{BASE_URL}/perf-buffer-stats", "Perf Buffer Statistics")
+        '3': (f"{BASE_URL}/source-ips/count", "Source IPs Count"),
+        '4': (f"{BASE_URL}/source-ips/stats", "Source IPs Stats"),
+        '5': (f"{BASE_URL}/sampling-config", "Sampling Configuration"),
+        '6': (f"{BASE_URL}/defaultK", "K Configuration"),
+        '7': (f"{BASE_URL}/perf-buffer-stats", "Perf Buffer Statistics")
     }
     
     if choice not in api_map:
         print("❌ Invalid choice!")
         return
     
-    if choice == '6':
+    if choice == '5':
         continuous_sampling_monitoring()
         return
-    elif choice == '7':
+    elif choice == '6':
         continuous_k_monitoring()
         return
-    elif choice == '8':
+    elif choice == '7':
         continuous_perf_buffer_monitoring()
         return
     
@@ -1258,7 +1247,6 @@ def run_all_tests():
         ("Flow Statistics (All)", test_flow_statistics_all),
         ("Flow Count", test_flow_count),
         ("Packet Records (All)", test_packet_records_all),
-        ("Packets Count (Combined)", test_packets_count),
         ("Source IPs (All)", test_source_ips_all),
         ("Source IPs Count", test_source_ips_count),
         ("Source IPs Top", test_source_ips_top),
@@ -1282,46 +1270,45 @@ def show_menu():
     print("  3.  Packet Records (All Flows)")
     print("  4.  Packet Records (Specific Flow)")
     print("  5.  Flow Count")
-    print("  6.  Packets Count (Combined/Legacy)")
     
     print("\n📊 Source IP Analytics APIs:")
-    print("  7.  Source IPs (All)")
-    print("  8.  Source IP (Specific)")
-    print("  9.  Source IPs Count")
-    print("  10. Source IPs Top")
-    print("  11. Source IPs Statistics")
-    print("  12. Clear Source IPs")
+    print("  6.  Source IPs (All)")
+    print("  7.  Source IP (Specific)")
+    print("  8.  Source IPs Count")
+    print("  9.  Source IPs Top")
+    print("  10. Source IPs Statistics")
+    print("  11. Clear Source IPs")
     
     print("\n⚙️  System APIs:")
-    print("  13. Health Check")
-    print("  14. NF Resource")
+    print("  12. Health Check")
+    print("  13. NF Resource")
     
     print("\n🎛️  Sampling Configuration APIs:")
-    print("  15. Get Sampling Configuration")
-    print("  16. Update Sampling Configuration (JSON)")
-    print("  17. Update Sampling Configuration (URL Param)")
-    print("  18. Sampling Configuration Workflow Test")
-    print("  19. Sampling Configuration Error Cases")
+    print("  14. Get Sampling Configuration")
+    print("  15. Update Sampling Configuration (JSON)")
+    print("  16. Update Sampling Configuration (URL Param)")
+    print("  17. Sampling Configuration Workflow Test")
+    print("  18. Sampling Configuration Error Cases")
     
-    print("\n� K Configuration APIs:")
-    print("  20. Get K Configuration")
-    print("  21. Update Global Default K")
-    print("  22. Get Specific Flow K")
-    print("  23. Update Specific Flow K")
-    print("  24. K Configuration Workflow Test")
-    print("  25. K Configuration Error Cases")
-    print("  26. K Configuration Performance Test")
+    print("\n🔧 K Configuration APIs:")
+    print("  19. Get K Configuration")
+    print("  20. Update Global Default K")
+    print("  21. Get Specific Flow K")
+    print("  22. Update Specific Flow K")
+    print("  23. K Configuration Workflow Test")
+    print("  24. K Configuration Error Cases")
+    print("  25. K Configuration Performance Test")
     
     print("\n🔧 Perf Buffer Configuration APIs:")
-    print("  27. Get Perf Buffer Configuration")
-    print("  28. Get Perf Buffer Statistics")
-    print("  29. Get Perf Buffer Lost Samples")
-    print("  30. Perf Buffer Workflow Test")
-    print("  31. Perf Buffer Stress Monitoring")
+    print("  26. Get Perf Buffer Configuration")
+    print("  27. Get Perf Buffer Statistics")
+    print("  28. Get Perf Buffer Lost Samples")
+    print("  29. Perf Buffer Workflow Test")
+    print("  30. Perf Buffer Stress Monitoring")
     
     print("\n🛠️  Utilities:")
-    print("  32. Continuous Monitoring")
-    print("  33. Run All Tests")
+    print("  31. Continuous Monitoring")
+    print("  32. Run All Tests")
     print("\n" + "="*60)
 
 def main():
@@ -1349,79 +1336,76 @@ def main():
             print_banner("Flow Count")
             test_flow_count()
         elif choice == '6':
-            print_banner("Packets Count (Combined/Legacy)")
-            test_packets_count()
-        elif choice == '7':
             print_banner("Source IPs (All)")
             test_source_ips_all()
-        elif choice == '8':
+        elif choice == '7':
             print_banner("Source IP (Specific)")
             test_source_ip_specific()
-        elif choice == '9':
+        elif choice == '8':
             print_banner("Source IPs Count")
             test_source_ips_count()
-        elif choice == '10':
+        elif choice == '9':
             print_banner("Source IPs Top")
             test_source_ips_top()
-        elif choice == '11':
+        elif choice == '10':
             print_banner("Source IPs Statistics")
             test_source_ips_stats()
-        elif choice == '12':
+        elif choice == '11':
             print_banner("Clear Source IPs")
             test_source_ips_clear()
-        elif choice == '13':
+        elif choice == '12':
             print_banner("Health Check")
             health_check()
-        elif choice == '14':
+        elif choice == '13':
             print_banner("NF Resource")
             test_nf_resource()
-        elif choice == '15':
+        elif choice == '14':
             print_banner("Get Sampling Configuration")
             test_sampling_config_get()
-        elif choice == '16':
+        elif choice == '15':
             print_banner("Update Sampling Configuration (JSON)")
             test_sampling_config_update_json()
-        elif choice == '17':
+        elif choice == '16':
             print_banner("Update Sampling Configuration (URL Param)")
             test_sampling_config_update_param()
-        elif choice == '18':
+        elif choice == '17':
             test_sampling_config_workflow()
-        elif choice == '19':
+        elif choice == '18':
             test_sampling_config_error_cases()
-        elif choice == '20':
+        elif choice == '19':
             print_banner("Get Global Default K")
             test_k_config_get()
-        elif choice == '21':
+        elif choice == '20':
             print_banner("Update Global Default K")
             test_k_config_update_global()
-        elif choice == '22':
+        elif choice == '21':
             print_banner("Get Specific Flow K")
             test_k_config_get_specific_flow()
-        elif choice == '23':
+        elif choice == '22':
             print_banner("Update Specific Flow K")
             test_k_config_update_specific_flow()
-        elif choice == '24':
+        elif choice == '23':
             test_k_config_workflow()
-        elif choice == '25':
+        elif choice == '24':
             test_k_config_error_cases()
-        elif choice == '26':
+        elif choice == '25':
             test_k_config_performance()
-        elif choice == '27':
+        elif choice == '26':
             print_banner("Get Perf Buffer Configuration")
             test_perf_buffer_config()
-        elif choice == '28':
+        elif choice == '27':
             print_banner("Get Perf Buffer Statistics")
             test_perf_buffer_stats()
-        elif choice == '29':
+        elif choice == '28':
             print_banner("Get Perf Buffer Lost Samples")
             test_perf_buffer_lost_samples()
-        elif choice == '30':
+        elif choice == '29':
             test_perf_buffer_workflow()
-        elif choice == '31':
+        elif choice == '30':
             test_perf_buffer_stress_monitoring()
-        elif choice == '32':
+        elif choice == '31':
             continuous_monitoring()
-        elif choice == '33':
+        elif choice == '32':
             run_all_tests()
         else:
             print("❌ Invalid choice! Please select 0-33.")

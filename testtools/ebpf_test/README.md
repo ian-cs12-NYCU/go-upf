@@ -40,7 +40,6 @@ Provides a complete interactive menu to test specific APIs.
 - **Packet Records (All)**: `GET /nwdaf-oam/flows/packet-records`
 - **Packet Records (Specific)**: `GET /nwdaf-oam/flows/packet-records/{srcIP}/{dstIP}/{srcPort}/{dstPort}`
 - **Flow Count**: `GET /nwdaf-oam/flows/count`
-- **Packets Count (Combined)**: `GET /nwdaf-oam/packets-count`
 
 ### 📊 Source IP Analytics APIs
 - **Source IPs (All)**: `GET /nwdaf-oam/source-ips`

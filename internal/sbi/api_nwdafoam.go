@@ -25,12 +25,6 @@ func (s *Server) getNwdafOamRoutes() []Route {
 			Pattern: "/nf-resource",
 			APIFunc: s.UpfOamNfResourceGet,
 		},
-		{
-			Name:    "PacketsCountGet",
-			Method:  http.MethodGet,
-			Pattern: "/packets-count",
-			APIFunc: s.UpfOamPacketsCountGet,
-		},
 		// New Flow Analytics APIs
 		{
 			Name:    "FlowStatisticsGet",
@@ -172,10 +166,6 @@ func (s *Server) UpfOamNfResourceGet(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, *nfResource)
-}
-
-func (s *Server) UpfOamPacketsCountGet(c *gin.Context) {
-	s.processor.PacketCounterGetProcedure(c)
 }
 
 // New Flow Analytics API handlers

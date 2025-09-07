@@ -20,8 +20,7 @@ $ make upf
 
 ## Test API
 ```
-# Original APIs
-$ curl 127.0.0.8:8000/nwdaf-oam/packets-count | jq
+# Source IP APIs
 $ curl 127.0.0.8:8000/nwdaf-oam/source-ips | jq
 
 # New Flow Analytics APIs
@@ -37,7 +36,6 @@ $ curl 127.0.0.8:8000/nwdaf-oam/flows/packet-records/192.168.1.1/192.168.1.100/8
 ```
 [GIN-debug] GET    /nwdaf-oam/               --> github.com/free5gc/go-upf/internal/sbi.(*Server).getNwdafOamRoutes.func1 (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/nf-resource    --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamNfResourceGet-fm (3 handlers)
-[GIN-debug] GET    /nwdaf-oam/packets-count  --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamPacketsCountGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/flows/statistics --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamFlowStatisticsGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/flows/statistics/:srcIP/:dstIP/:srcPort/:dstPort --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamFlowStatisticsByKeyGet-fm (3 handlers)
 [GIN-debug] GET    /nwdaf-oam/flows/packet-records --> github.com/free5gc/go-upf/internal/sbi.(*Server).UpfOamPacketRecordsGet-fm (3 handlers)
