@@ -35,6 +35,8 @@ type ebpf_counterFlowStats struct {
 	Bytes     uint64
 	FirstTsNs uint64
 	LastTsNs  uint64
+	Direction uint8
+	Reserved  [7]uint8
 }
 
 type ebpf_counterIpInfo struct {

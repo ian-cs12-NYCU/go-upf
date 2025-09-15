@@ -56,6 +56,19 @@ func Ntohs(n uint16) uint16 {
 	return (n>>8)&0xff | (n&0xff)<<8
 }
 
+// DirectionToString converts direction constants to human-readable strings
+// This function maps eBPF direction constants to string representations
+func DirectionToString(direction uint8) string {
+	switch direction {
+	case 1: // DIRECTION_UL
+		return "Uplink"
+	case 2: // DIRECTION_DL
+		return "Downlink"
+	default:
+		return "Unknown"
+	}
+}
+
 // TimeStamp represents a timestamp with multiple formats for different use cases
 type TimeStamp struct {
 	NanoSeconds uint64 `json:"ns"`        // Raw timestamp in nanoseconds since system boot, useful for precise calculations and comparisons

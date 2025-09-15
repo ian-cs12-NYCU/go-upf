@@ -106,6 +106,8 @@ struct flow_stats {
     __u64 bytes;        ///< Byte count for this flow
     __u64 first_ts_ns;  ///< Timestamp of first packet
     __u64 last_ts_ns;   ///< Timestamp of last packet
+    __u8 direction;     ///< Flow direction: DIRECTION_UL/DIRECTION_DL
+    __u8 reserved[7];   ///< Reserved for alignment (padding to 8-byte boundary)
 };
 
 /**

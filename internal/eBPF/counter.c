@@ -267,16 +267,23 @@ static __always_inline int record_flow_and_send_event(void *ctx, struct iphdr *i
         stats->packets++;
         stats->bytes += pkt_len;
         stats->last_ts_ns = ts;
+        // Update direction if it wasn't set before (for backward compatibility)
+        if (stats->direction == 0) {
+            stats->direction = current_direction;
+        }
         bpf_debug(DBG_PACKET, "Updated flow: proto=%u, packets=%llu, bytes=%llu\n", 
                   proto, stats->packets, stats->bytes);
+        bpf_debug(DBG_PACKET, "Updated flow direction: %u\n", stats->direction);
     } else {
         // Create new stats
         new_stats.packets = 1;
         new_stats.bytes = pkt_len;
         new_stats.first_ts_ns = ts;
         new_stats.last_ts_ns = ts;
+        new_stats.direction = current_direction;
         bpf_map_update_elem(&flow_statistics, &key, &new_stats, BPF_ANY);
         bpf_debug(DBG_PACKET, "New flow: proto=%u\n", proto);
+        bpf_debug(DBG_PACKET, "New flow direction: %u\n", current_direction);
     }
     
     // Send packet event to global buffer (instead of per-flow ring buffer)

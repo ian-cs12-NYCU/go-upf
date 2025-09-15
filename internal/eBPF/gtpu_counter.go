@@ -78,7 +78,7 @@ type PacketRecord struct {
 	TS        utils.TimeStamp `json:"timestamp"` // Timestamp with multiple formats
 	Length    uint32          `json:"length"`    // Packet length
 	Protocol  uint8           `json:"protocol"`  // L4 protocol (TCP/UDP etc.)
-	Direction uint8           `json:"direction"` // Direction (0=unknown, 1=ingress, 2=egress)
+	Direction string          `json:"direction"` // Direction ("Uplink", "Downlink", or "Unknown")
 	TCPFlags  uint8           `json:"tcpFlags"`  // TCP flags (if applicable)
 	DSCP_ECN  uint8           `json:"dscpEcn"`   // DSCP/ECN value
 }
@@ -93,7 +93,7 @@ func filterValidPacketRecords(packetInfos []PacketInfo) []PacketRecord {
 				TS:        pktInfo.TS,
 				Length:    uint32(pktInfo.Length),
 				Protocol:  pktInfo.Protocol,
-				Direction: pktInfo.Direction,
+				Direction: utils.DirectionToString(pktInfo.Direction),
 				TCPFlags:  pktInfo.TCPFlags,
 				DSCP_ECN:  pktInfo.DSCP_ECN,
 			})

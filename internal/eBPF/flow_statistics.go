@@ -10,14 +10,15 @@ import (
 
 // FlowStatistics represents the basic statistics for a flow
 type FlowStatistics struct {
-	SrcIP   net.IP          `json:"srcIP"`     // Source IP
-	DstIP   net.IP          `json:"dstIP"`     // Destination IP
-	SrcPort uint16          `json:"srcPort"`   // Source port
-	DstPort uint16          `json:"dstPort"`   // Destination port
-	Cnt     int             `json:"cnt"`       // Packet count
-	Bytes   uint64          `json:"bytes"`     // Total traffic (bytes)
-	FirstTS utils.TimeStamp `json:"firstTime"` // First packet timestamp
-	LastTS  utils.TimeStamp `json:"lastTime"`  // Last packet timestamp
+	SrcIP     net.IP          `json:"srcIP"`     // Source IP
+	DstIP     net.IP          `json:"dstIP"`     // Destination IP
+	SrcPort   uint16          `json:"srcPort"`   // Source port
+	DstPort   uint16          `json:"dstPort"`   // Destination port
+	Cnt       int             `json:"cnt"`       // Packet count
+	Bytes     uint64          `json:"bytes"`     // Total traffic (bytes)
+	FirstTS   utils.TimeStamp `json:"firstTime"` // First packet timestamp
+	LastTS    utils.TimeStamp `json:"lastTime"`  // Last packet timestamp
+	Direction string          `json:"direction"` // Flow direction: "Uplink" or "Downlink"
 }
 
 // GetFlowStatistics retrieves only the flow statistics from eBPF map (without packet records)
@@ -38,14 +39,15 @@ func (e *EbpfProbe) GetFlowStatistics() ([]FlowStatistics, error) {
 		logger.EbpfLog.Traceln("key: ", key, "value: ", value)
 
 		flow := FlowStatistics{
-			SrcIP:   utils.Uint32ToIP(key.Addrs.Saddr),
-			SrcPort: utils.Ntohs(key.Sport),
-			DstIP:   utils.Uint32ToIP(key.Addrs.Daddr),
-			DstPort: utils.Ntohs(key.Dport),
-			Cnt:     int(value.Packets),
-			Bytes:   value.Bytes,
-			FirstTS: utils.FormatTimeStamp(value.FirstTsNs),
-			LastTS:  utils.FormatTimeStamp(value.LastTsNs),
+			SrcIP:     utils.Uint32ToIP(key.Addrs.Saddr),
+			SrcPort:   utils.Ntohs(key.Sport),
+			DstIP:     utils.Uint32ToIP(key.Addrs.Daddr),
+			DstPort:   utils.Ntohs(key.Dport),
+			Cnt:       int(value.Packets),
+			Bytes:     value.Bytes,
+			FirstTS:   utils.FormatTimeStamp(value.FirstTsNs),
+			LastTS:    utils.FormatTimeStamp(value.LastTsNs),
+			Direction: utils.DirectionToString(value.Direction),
 		}
 
 		flows = append(flows, flow)
@@ -80,14 +82,15 @@ func (e *EbpfProbe) GetFlowStatisticsByKey(srcIP net.IP, dstIP net.IP, srcPort, 
 	}
 
 	flow := &FlowStatistics{
-		SrcIP:   srcIP,
-		SrcPort: srcPort,
-		DstIP:   dstIP,
-		DstPort: dstPort,
-		Cnt:     int(value.Packets),
-		Bytes:   value.Bytes,
-		FirstTS: utils.FormatTimeStamp(value.FirstTsNs),
-		LastTS:  utils.FormatTimeStamp(value.LastTsNs),
+		SrcIP:     srcIP,
+		SrcPort:   srcPort,
+		DstIP:     dstIP,
+		DstPort:   dstPort,
+		Cnt:       int(value.Packets),
+		Bytes:     value.Bytes,
+		FirstTS:   utils.FormatTimeStamp(value.FirstTsNs),
+		LastTS:    utils.FormatTimeStamp(value.LastTsNs),
+		Direction: utils.DirectionToString(value.Direction),
 	}
 
 	return flow, nil

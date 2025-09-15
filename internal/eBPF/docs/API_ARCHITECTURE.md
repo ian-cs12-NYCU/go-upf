@@ -45,7 +45,7 @@ Retrieve basic flow statistics without packet records for lightweight monitoring
 **GET** `/nwdaf-oam/flows/packet-records`  
 **GET** `/nwdaf-oam/flows/packet-records/{srcIP}/{dstIP}/{srcPort}/{dstPort}`
 
-Extract detailed packet records from ring buffer for deep packet inspection. Returns recent packet details including length, protocol, direction, TCP flags, and DSCP/ECN values.
+Extract detailed packet records from ring buffer for deep packet inspection. Returns recent packet details including length, protocol, direction (as human-readable strings: "Uplink"/"Downlink"/"Unknown"), TCP flags, and DSCP/ECN values.
 
 ### 3. Flow Count API
 **GET** `/nwdaf-oam/flows/count`
@@ -93,7 +93,8 @@ curl http://localhost:8080/nwdaf-oam/flows/statistics
       "lastTime": {
         "ns": 1584934840816072,
         "formatted": "2025-09-25T08:15:34.84Z"
-      }
+      },
+      "direction": "Uplink"
     },
     {
       "srcIP": "1.1.1.1",
@@ -109,7 +110,8 @@ curl http://localhost:8080/nwdaf-oam/flows/statistics
       "lastTime": {
         "ns": 1584934846003434,
         "formatted": "2025-09-25T08:15:34.846Z"
-      }
+      },
+      "direction": "Downlink"
     }
   ]
 }
@@ -154,7 +156,7 @@ curl http://localhost:8080/nwdaf-oam/flows/packet-records
           },
           "length": 142,
           "protocol": 1,
-          "direction": 1,
+          "direction": "Uplink",
           "tcpFlags": 0,
           "dscpEcn": 0
         },
@@ -165,7 +167,7 @@ curl http://localhost:8080/nwdaf-oam/flows/packet-records
           },
           "length": 142,
           "protocol": 1,
-          "direction": 1,
+          "direction": "Uplink",
           "tcpFlags": 0,
           "dscpEcn": 0
         },
@@ -176,7 +178,7 @@ curl http://localhost:8080/nwdaf-oam/flows/packet-records
           },
           "length": 0,
           "protocol": 0,
-          "direction": 0,
+          "direction": "Unknown",
           "tcpFlags": 0,
           "dscpEcn": 0
         }
@@ -195,7 +197,7 @@ curl http://localhost:8080/nwdaf-oam/flows/packet-records
           },
           "length": 84,
           "protocol": 1,
-          "direction": 2,
+          "direction": "Downlink",
           "tcpFlags": 0,
           "dscpEcn": 0
         },
@@ -206,7 +208,7 @@ curl http://localhost:8080/nwdaf-oam/flows/packet-records
           },
           "length": 84,
           "protocol": 1,
-          "direction": 2,
+          "direction": "Downlink",
           "tcpFlags": 0,
           "dscpEcn": 0
         }
@@ -333,14 +335,15 @@ curl http://localhost:8080/nwdaf-oam/source-ips/stats
 
 ```go
 type FlowStatistics struct {
-    SrcIP   net.IP          `json:"srcIP"`     // Source IP address
-    DstIP   net.IP          `json:"dstIP"`     // Destination IP address
-    SrcPort uint16          `json:"srcPort"`   // Source port
-    DstPort uint16          `json:"dstPort"`   // Destination port
-    Cnt     int             `json:"cnt"`       // Packet count
-    Bytes   uint64          `json:"bytes"`     // Total traffic in bytes
-    FirstTS utils.TimeStamp `json:"firstTime"` // First packet timestamp
-    LastTS  utils.TimeStamp `json:"lastTime"`  // Last packet timestamp
+    SrcIP     net.IP          `json:"srcIP"`     // Source IP address
+    DstIP     net.IP          `json:"dstIP"`     // Destination IP address
+    SrcPort   uint16          `json:"srcPort"`   // Source port
+    DstPort   uint16          `json:"dstPort"`   // Destination port
+    Cnt       int             `json:"cnt"`       // Packet count
+    Bytes     uint64          `json:"bytes"`     // Total traffic in bytes
+    FirstTS   utils.TimeStamp `json:"firstTime"` // First packet timestamp
+    LastTS    utils.TimeStamp `json:"lastTime"`  // Last packet timestamp
+    Direction string          `json:"direction"` // Flow direction: "Uplink", "Downlink", or "Unknown"
 }
 ```
 
@@ -366,7 +369,7 @@ type PacketRecord struct {
     TS        utils.TimeStamp `json:"timestamp"` // Packet timestamp with multiple formats
     Length    uint32          `json:"length"`    // Packet length in bytes
     Protocol  uint8           `json:"protocol"`  // L4 protocol (TCP/UDP etc.)
-    Direction uint8           `json:"direction"` // Direction (0=unknown, 1=ingress, 2=egress)
+    Direction string          `json:"direction"` // Direction: "Uplink", "Downlink", or "Unknown"
     TCPFlags  uint8           `json:"tcpFlags"`  // TCP flags (if applicable)
     DSCP_ECN  uint8           `json:"dscpEcn"`   // DSCP/ECN value
 }
