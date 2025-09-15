@@ -83,6 +83,25 @@ type PacketRecord struct {
 	DSCP_ECN  uint8           `json:"dscpEcn"`   // DSCP/ECN value
 }
 
+// filterValidPacketRecords filters out packets with Length = 0 (ring buffer design artifacts)
+// and converts PacketInfo to PacketRecord
+func filterValidPacketRecords(packetInfos []PacketInfo) []PacketRecord {
+	var validPkts []PacketRecord
+	for _, pktInfo := range packetInfos {
+		if pktInfo.Length != 0 { // Filter out ring buffer artifacts
+			validPkts = append(validPkts, PacketRecord{
+				TS:        pktInfo.TS,
+				Length:    uint32(pktInfo.Length),
+				Protocol:  pktInfo.Protocol,
+				Direction: pktInfo.Direction,
+				TCPFlags:  pktInfo.TCPFlags,
+				DSCP_ECN:  pktInfo.DSCP_ECN,
+			})
+		}
+	}
+	return validPkts
+}
+
 // Flows stores connection information and statistics
 type Flows struct {
 	SrcIP      net.IP          `json:"srcIP"`      // Source IP
@@ -323,18 +342,8 @@ func (e *EbpfProbe) GetFlows() (flows []Flows, err error) {
 		// Look for corresponding flow state to get packet records
 		key := fmt.Sprintf("%s:%d->%s:%d(%d)", stat.SrcIP, stat.SrcPort, stat.DstIP, stat.DstPort, 6) // Assume TCP for now
 		if flowState, exists := flowStatesMap[key]; exists {
-			// Convert PacketInfo to PacketRecord
-			flow.RecentPkts = make([]PacketRecord, len(flowState.RecentPkts))
-			for i, pktInfo := range flowState.RecentPkts {
-				flow.RecentPkts[i] = PacketRecord{
-					TS:        pktInfo.TS,
-					Length:    uint32(pktInfo.Length),
-					Protocol:  pktInfo.Protocol,
-					Direction: pktInfo.Direction,
-					TCPFlags:  pktInfo.TCPFlags,
-					DSCP_ECN:  pktInfo.DSCP_ECN,
-				}
-			}
+			// Filter and convert PacketInfo to PacketRecord
+			flow.RecentPkts = filterValidPacketRecords(flowState.RecentPkts)
 		} else {
 			flow.RecentPkts = []PacketRecord{} // Empty slice if no records found
 		}
@@ -375,18 +384,8 @@ func (e *EbpfProbe) GetAllFlowPacketRecords() ([]FlowPacketRecords, error) {
 			DstPort: flowState.FlowKey.DstPort,
 		}
 
-		// Convert PacketInfo to PacketRecord
-		flowRecord.RecentPkts = make([]PacketRecord, len(flowState.RecentPkts))
-		for i, pktInfo := range flowState.RecentPkts {
-			flowRecord.RecentPkts[i] = PacketRecord{
-				TS:        pktInfo.TS,
-				Length:    uint32(pktInfo.Length),
-				Protocol:  pktInfo.Protocol,
-				Direction: pktInfo.Direction,
-				TCPFlags:  pktInfo.TCPFlags,
-				DSCP_ECN:  pktInfo.DSCP_ECN,
-			}
-		}
+		// Convert PacketInfo to PacketRecord, filtering out packets with Length = 0
+		flowRecord.RecentPkts = filterValidPacketRecords(flowState.RecentPkts)
 
 		flowRecords = append(flowRecords, flowRecord)
 	}
@@ -425,18 +424,8 @@ func (e *EbpfProbe) GetFlowPacketRecordsByKey(srcIP net.IP, dstIP net.IP, srcPor
 		DstPort: dstPort,
 	}
 
-	// Convert PacketInfo to PacketRecord
-	flowRecord.RecentPkts = make([]PacketRecord, len(flowState.RecentPkts))
-	for i, pktInfo := range flowState.RecentPkts {
-		flowRecord.RecentPkts[i] = PacketRecord{
-			TS:        pktInfo.TS,
-			Length:    uint32(pktInfo.Length),
-			Protocol:  pktInfo.Protocol,
-			Direction: pktInfo.Direction,
-			TCPFlags:  pktInfo.TCPFlags,
-			DSCP_ECN:  pktInfo.DSCP_ECN,
-		}
-	}
+	// Convert PacketInfo to PacketRecord, filtering out packets with Length = 0
+	flowRecord.RecentPkts = filterValidPacketRecords(flowState.RecentPkts)
 
 	logger.EbpfLog.Infof("Retrieved %d packet records for flow %s:%d -> %s:%d",
 		len(flowRecord.RecentPkts), srcIP, srcPort, dstIP, dstPort)
