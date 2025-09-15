@@ -14,6 +14,7 @@ type FlowStatistics struct {
 	DstIP     net.IP          `json:"dstIP"`     // Destination IP
 	SrcPort   uint16          `json:"srcPort"`   // Source port
 	DstPort   uint16          `json:"dstPort"`   // Destination port
+	Protocol  uint8           `json:"protocol"`  // L4 protocol (TCP=6, UDP=17, ICMP=1)
 	Cnt       int             `json:"cnt"`       // Packet count
 	Bytes     uint64          `json:"bytes"`     // Total traffic (bytes)
 	FirstTS   utils.TimeStamp `json:"firstTime"` // First packet timestamp
@@ -43,6 +44,7 @@ func (e *EbpfProbe) GetFlowStatistics() ([]FlowStatistics, error) {
 			SrcPort:   utils.Ntohs(key.Sport),
 			DstIP:     utils.Uint32ToIP(key.Addrs.Daddr),
 			DstPort:   utils.Ntohs(key.Dport),
+			Protocol:  key.Proto,
 			Cnt:       int(value.Packets),
 			Bytes:     value.Bytes,
 			FirstTS:   utils.FormatTimeStamp(value.FirstTsNs),
@@ -57,9 +59,31 @@ func (e *EbpfProbe) GetFlowStatistics() ([]FlowStatistics, error) {
 	return flows, nil
 }
 
-// GetFlowStatisticsByKey retrieves statistics for a specific flow
+// GetFlowStatisticsByKey retrieves statistics for a specific flow (legacy - assumes UDP protocol)
+// Deprecated: Use GetFlowStatisticsByKeyWithProtocol for protocol-specific lookups
 func (e *EbpfProbe) GetFlowStatisticsByKey(srcIP net.IP, dstIP net.IP, srcPort, dstPort uint16) (*FlowStatistics, error) {
+	// For backward compatibility, try UDP first (protocol 17), then TCP (protocol 6)
+	// UDP is most common in 5G UPF due to GTP-U tunneling
+	result, err := e.GetFlowStatisticsByKeyWithProtocol(srcIP, dstIP, srcPort, dstPort, 17) // UDP
+	if err == nil {
+		return result, nil
+	}
+
+	// If UDP flow not found, try TCP
+	result, err = e.GetFlowStatisticsByKeyWithProtocol(srcIP, dstIP, srcPort, dstPort, 6) // TCP
+	if err == nil {
+		return result, nil
+	}
+
+	// Return the original UDP lookup error for backward compatibility
+	return e.GetFlowStatisticsByKeyWithProtocol(srcIP, dstIP, srcPort, dstPort, 17)
+}
+
+// GetFlowStatisticsByKeyWithProtocol retrieves statistics for a specific flow with protocol
+func (e *EbpfProbe) GetFlowStatisticsByKeyWithProtocol(srcIP net.IP, dstIP net.IP, srcPort, dstPort uint16, protocol uint8) (*FlowStatistics, error) {
 	key := ebpf_counterFlowKey{
+		Family: 4, // IPv4
+		Proto:  protocol,
 		Addrs: struct {
 			Saddr   uint32
 			Daddr   uint32
@@ -86,6 +110,7 @@ func (e *EbpfProbe) GetFlowStatisticsByKey(srcIP net.IP, dstIP net.IP, srcPort, 
 		SrcPort:   srcPort,
 		DstIP:     dstIP,
 		DstPort:   dstPort,
+		Protocol:  protocol,
 		Cnt:       int(value.Packets),
 		Bytes:     value.Bytes,
 		FirstTS:   utils.FormatTimeStamp(value.FirstTsNs),

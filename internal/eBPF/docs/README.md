@@ -1,12 +1,41 @@
 ## 架構一覽
 
 1. eBPF（XDP/TC 掛在 UPF 的 N6/N3/N9 需要的位置）：
-    - 解析封包 → 萃取輕量欄位 → **打包成 event** → **丟進全域 `BPF_MAP_TYPE_PERF_EVENT_ARRAY`**。
+    - 解析封包 → 萃取輕量欄位（包括協議資訊）→ **打包成 event** → **丟進全域 `BPF_MAP_TYPE_PERF_EVENT_ARRAY`**。
     - 不做重運算，只做抽樣/限流與失敗計數。
 2. Go 使用者態：
     - 開 perf reader，阻塞讀事件。
     - 以 `map[FlowKey] → 環形佇列（容量 K 可動態）` 維護「每 flow 最近 K 包」。
-    - 週期性把每 flow 的彙總（`cnt/bytes/first/last/recentPkts`…）輸出成你的 `connList` JSON。
+    - 週期性把每 flow 的彙總（`cnt/bytes/first/last/recentPkts/protocol`…）輸出成你的 `connList` JSON。
+
+## Flow Key Enhancement
+
+### Protocol Support
+現在 FlowKey 完整支援 5-tuple 識別：
+- Source IP/Port
+- Destination IP/Port  
+- **Protocol (L4 協議)**
+
+### Supported Protocols
+- **TCP (6)**: 傳輸控制協議
+- **UDP (17)**: 用戶資料包協議（5G 環境中的 GTP-U 主要使用）
+- **ICMP (1)**: 網際網路控制訊息協議
+- **ICMPv6 (58)**: IPv6 版本的 ICMP
+- **SCTP (132)**: 串流控制傳輸協議
+
+### Flow Statistics JSON Response
+```json
+{
+  "srcIP": "10.60.0.1",
+  "dstIP": "1.1.1.1", 
+  "srcPort": 2048,
+  "dstPort": 53,
+  "protocol": 17,
+  "cnt": 4,
+  "bytes": 568,
+  "direction": "Uplink"
+}
+```
 
 
 ## How to use

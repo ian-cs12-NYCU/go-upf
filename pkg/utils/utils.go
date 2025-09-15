@@ -69,6 +69,25 @@ func DirectionToString(direction uint8) string {
 	}
 }
 
+// ProtocolToString converts protocol numbers to human-readable strings
+// This function maps common L4 protocol numbers to string representations
+func ProtocolToString(protocol uint8) string {
+	switch protocol {
+	case 1:
+		return "ICMP"
+	case 6:
+		return "TCP"
+	case 17:
+		return "UDP"
+	case 58:
+		return "ICMPv6"
+	case 132:
+		return "SCTP"
+	default:
+		return "Unknown"
+	}
+}
+
 // TimeStamp represents a timestamp with multiple formats for different use cases
 type TimeStamp struct {
 	NanoSeconds uint64 `json:"ns"`        // Raw timestamp in nanoseconds since system boot, useful for precise calculations and comparisons

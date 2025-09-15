@@ -84,6 +84,7 @@ curl http://localhost:8080/nwdaf-oam/flows/statistics
       "dstIP": "1.1.1.1",
       "srcPort": 2048,
       "dstPort": 0,
+      "protocol": 17,
       "cnt": 4,
       "bytes": 568,
       "firstTime": {
@@ -101,6 +102,7 @@ curl http://localhost:8080/nwdaf-oam/flows/statistics
       "dstIP": "10.60.0.1",
       "srcPort": 0,
       "dstPort": 0,
+      "protocol": 17,
       "cnt": 4,
       "bytes": 336,
       "firstTime": {
@@ -339,6 +341,7 @@ type FlowStatistics struct {
     DstIP     net.IP          `json:"dstIP"`     // Destination IP address
     SrcPort   uint16          `json:"srcPort"`   // Source port
     DstPort   uint16          `json:"dstPort"`   // Destination port
+    Protocol  uint8           `json:"protocol"`  // L4 protocol (TCP=6, UDP=17, ICMP=1)
     Cnt       int             `json:"cnt"`       // Packet count
     Bytes     uint64          `json:"bytes"`     // Total traffic in bytes
     FirstTS   utils.TimeStamp `json:"firstTime"` // First packet timestamp
