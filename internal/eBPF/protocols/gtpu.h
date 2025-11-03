@@ -11,7 +11,7 @@
  */
 
 #include <linux/bpf.h>
-#include <stdint.h>
+#include <linux/types.h>
 
 /**
  * @brief Total size of GTP encapsulation (IP + UDP + GTP headers)

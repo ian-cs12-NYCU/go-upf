@@ -4,7 +4,7 @@
 #include <linux/bpf.h>  // Any BPF program must include this header
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include <netinet/in.h>
+#include <linux/in.h>  // For IPPROTO_* constants
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/pkt_cls.h>  // TC classifier support for traffic control
@@ -545,7 +545,7 @@ static __always_inline __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh,
         return XDP_PASS;
     }
 
-    __u16 eth_type = htons(ethh->h_proto);
+    __u16 eth_type = bpf_ntohs(ethh->h_proto);
     bpf_debug(DBG_PACKET, "UL(XDP): Ethernet type: 0x%x\n", eth_type);
 
     switch (eth_type) {
@@ -560,7 +560,7 @@ static __always_inline __u32 eth_handle(struct xdp_md *ctx, struct ethhdr *ethh,
             bpf_debug(DBG_PACKET, "UL(XDP): Invalid VLAN header\n");
             return XDP_PASS;
         }
-        eth_type = htons(vlan_hdr->h_vlan_encapsulated_proto);
+        eth_type = bpf_ntohs(vlan_hdr->h_vlan_encapsulated_proto);
 
     case ETH_P_IP:
         bpf_debug(DBG_PACKET, "UL(XDP): IPv4 packet\n");

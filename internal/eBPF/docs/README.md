@@ -39,12 +39,98 @@
 
 
 ## How to use
+
+### Prerequisites
+在執行 `go generate` 之前，需要先安裝必要的工具：
+
+```bash
+# 安裝 LLVM 工具鏈、Clang 和 libbpf 開發套件
+sudo apt-get update
+sudo apt-get install -y llvm clang libbpf-dev
+
+# 安裝 Linux 核心標頭檔
+sudo apt-get install -y linux-headers-$(uname -r) linux-libc-dev
 ```
+
+### 建立架構相關的標頭檔符號連結
+在 Ubuntu 系統上，eBPF 編譯器需要存取架構特定的標頭檔。如果遇到 `file not found` 錯誤，需要建立以下符號連結：
+
+```bash
+# 為 x86_64 架構建立符號連結
+sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
+sudo ln -s /usr/include/x86_64-linux-gnu/bits /usr/include/bits
+sudo ln -s /usr/include/x86_64-linux-gnu/sys /usr/include/sys
+sudo ln -s /usr/include/x86_64-linux-gnu/gnu /usr/include/gnu
+```
+
+### 編譯 eBPF 程式
+```bash
 $ cd ./internal/eBPF
 $ go generate 
 
 // make UPF in free5gc directory
 $ make upf
+```
+
+### 常見問題排解
+
+#### 問題 1: `llvm-strip: executable file not found in $PATH`
+**原因**: 缺少 LLVM 工具鏈
+
+**解決方案**:
+```bash
+sudo apt-get install -y llvm clang libbpf-dev
+```
+
+#### 問題 2: `fatal error: 'asm/types.h' file not found`
+**原因**: 缺少架構相關的標頭檔符號連結
+
+**解決方案**:
+```bash
+sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
+```
+
+#### 問題 3: `fatal error: 'bits/wordsize.h' file not found`
+**原因**: 缺少 bits 目錄的符號連結
+
+**解決方案**:
+```bash
+sudo ln -s /usr/include/x86_64-linux-gnu/bits /usr/include/bits
+```
+
+#### 問題 4: `fatal error: 'sys/cdefs.h' file not found`
+**原因**: 缺少 sys 目錄的符號連結
+
+**解決方案**:
+```bash
+sudo ln -s /usr/include/x86_64-linux-gnu/sys /usr/include/sys
+```
+
+#### 問題 5: `fatal error: 'gnu/stubs.h' file not found`
+**原因**: 缺少 gnu 目錄的符號連結
+
+**解決方案**:
+```bash
+sudo ln -s /usr/include/x86_64-linux-gnu/gnu /usr/include/gnu
+```
+
+#### 問題 6: 編譯時包含了使用者空間標頭檔
+**原因**: eBPF 程式應該只使用核心標頭檔，不應該包含使用者空間的標頭檔如 `<netinet/in.h>` 或 `<stdint.h>`
+
+**解決方案**: 
+- 將 `#include <netinet/in.h>` 改為 `#include <linux/in.h>`
+- 將 `#include <stdint.h>` 改為 `#include <linux/types.h>`
+- 使用 eBPF helper 函數如 `bpf_ntohs()` 而非標準 C 函數如 `htons()`
+
+### 驗證安裝
+編譯成功後，應該會看到以下輸出：
+```
+Compiled /path/to/ebpf_counter_bpfel.o
+Stripped /path/to/ebpf_counter_bpfel.o
+Wrote /path/to/ebpf_counter_bpfel.go
+Compiled /path/to/ebpf_counter_bpfeb.o
+Stripped /path/to/ebpf_counter_bpfeb.o
+Wrote /path/to/ebpf_counter_bpfeb.go
 ```
 
 ## Test API
